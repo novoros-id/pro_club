@@ -3,9 +3,11 @@ import io_json
 import io_universal
 
 def create_user(bot, chat_id, user_name):
+    import send_telegram
     create_folder_structure(user_name)
     io_json.create_file_user_config(user_name)
-    bot.send_message(chat_id, "Папки созданы")
+    send_telegram.send_(chat_id, "Test")
+    #bot.send_message(chat_id, "Папки созданы")
 
 def return_user_folder(user_name):
     user_folder_name = io_universal.sanitize_filename(user_name)

@@ -1,11 +1,8 @@
 import config_vgn
-import io_file_operation
 import telebot
+import time
 
 bot = telebot.TeleBot(config_vgn.token)
-
-def send_(tt):
-    bot.send_message(message.chat.id, tt)
 
 @bot.message_handler(commands=["start"])
 def start_handler(message):
@@ -13,5 +10,6 @@ def start_handler(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-  io_file_operation.create_user (bot, message.chat.id, message.from_user.username)
+  time.sleep(int(message.text))
+  bot.send_message(message.chat.id, 'Привет! Я бот для теста (vgn).' + message.text)
 bot.polling()
