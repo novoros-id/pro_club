@@ -1,13 +1,17 @@
 import os
 import io_file_operation
+import io_send_telegram
 
-from langchain.document_loaders import PyPDFLoader
+#from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
-from langchain.embeddings  import HuggingFaceEmbeddings
+#from langchain.embeddings  import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
-from langchain.vectorstores import Chroma
+#from langchain.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.config import Settings
 
@@ -17,6 +21,8 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain import PromptTemplate
 from langchain.schema import HumanMessage
 
+def is_pdf(filename):
+    return os.path.splitext(filename)[1].lower() == '.pdf'
 
 def processing_user_files(chat_id, user_name):
 
@@ -24,12 +30,20 @@ def processing_user_files(chat_id, user_name):
 
     if len(pdf_files_list) == 0:
         #todo show user error
+        print ("no files")
         return
     
     for file_item in pdf_files_list:
-        separate_text = separate_file(chat_id, user_name, file_item)
-        embedding = get_embeddings_from_separate_text(chat_id, user_name, separate_text)
-        put_vector_in_db(chat_id, user_name, separate_text, embedding)
+        if is_pdf(file_item):
+            print ("обрабатываю " + file_item)
+            separate_text = separate_file(chat_id, user_name, file_item)
+            embedding = get_embeddings_from_separate_text(chat_id, user_name, separate_text)
+            put_vector_in_db(chat_id, user_name, separate_text, embedding)
+    
+        else:
+            print("Это не PDF-файл")
+            
+    io_send_telegram.send_telegram_message (chat_id, "База создана можно задавать вопросы")  
 
 def get_all_user_files(chat_id, user_name):
 
@@ -39,10 +53,13 @@ def get_all_user_files(chat_id, user_name):
     
     pdf_folder = os.path.join(user_folder_path, 'pdf')
 
+    print ("pdf_folder users" + pdf_folder)
+
     if not os.path.exists(pdf_folder):
         return []
     
     pdf_files_all = [os.path.join(pdf_folder, file) for file in os.listdir(pdf_folder)]
+    print ("количество файлов " + str(len(pdf_files_all)))
 
     return pdf_files_all
 
@@ -54,6 +71,8 @@ def separate_file(chat_id, user_name, file_path):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
     documents = text_splitter.split_documents(documents)
 
+    print ("separate_files " + file_path)
+    print ("всего фрагментов " + str(len(documents)))
     return documents
 
 def get_embeddings_from_separate_text(chat_id, user_name, separate_text):
@@ -61,7 +80,7 @@ def get_embeddings_from_separate_text(chat_id, user_name, separate_text):
     hf_embeddings_model = HuggingFaceEmbeddings(
         #todo: need parametr for model_kwargs
     model_name="cointegrated/LaBSE-en-ru", model_kwargs={"device": "cpu"})
-
+    print ("get_embeddings_from_separate_text")
     return hf_embeddings_model
 
 def put_vector_in_db(chat_id, user_name, separate_text, embedding):
@@ -71,16 +90,22 @@ def put_vector_in_db(chat_id, user_name, separate_text, embedding):
         return False
     
     db_folder = os.path.join(user_folder_path, 'db')
+    print ("db_folder " + db_folder)
 
     if not os.path.exists(db_folder):
+        print ("no db")
         return False
 
-    vector_db = Chroma.from_documents(
-        documents=separate_text,
-        embedding=embedding,
-        persist_directory=db_folder,
-        client_settings=Settings(anonymized_telemetry=False),
-        )
+    try:
+        vector_db = Chroma.from_documents(
+            documents=separate_text,
+            embedding=embedding,
+            persist_directory=db_folder,
+            client_settings=Settings(anonymized_telemetry=False),
+            )
+        print ("База создана")
+    except Exception as e:
+        print(f"Произошла ошибка создания базы данных: {e}")
     
     return True
 
