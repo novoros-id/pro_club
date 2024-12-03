@@ -1,7 +1,7 @@
-import config_ds
+import config.py 
 import telebot
 
-bot = telebot.TeleBot(config_ds.bot_token)
+bot = telebot.TeleBot(config.bot_token)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
