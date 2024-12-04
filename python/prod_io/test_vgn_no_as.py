@@ -1,8 +1,8 @@
-import config_vgn
+import config
 import telebot
 import time
 
-bot = telebot.TeleBot(config_vgn.token)
+bot = telebot.TeleBot(config.bot_token)
 
 @bot.message_handler(commands=["start"])
 def start_handler(message):
