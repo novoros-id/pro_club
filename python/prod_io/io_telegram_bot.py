@@ -1,20 +1,18 @@
 import config
 import telebot
-import os
+import io_file_operation
+# import os
 
 bot = telebot.TeleBot(config.bot_token)
-
-#Тестовая папка для сохранения файлов
-test_download_folder = "test_download"
-if not os.path.exists(test_download_folder):
-    os.makedirs(test_download_folder)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = str(message.chat.id)
     username = message.from_user.username or 'Unknown'
     first_name = message.from_user.first_name or 'User'
-    # Создаем клаву
+    io_file_operation.create_user(chat_id, username)
+
+    # Создаем клавиатуру
     keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     help_button = telebot.types.KeyboardButton(text="Помощь")
     keyboard.add(help_button)
@@ -47,23 +45,8 @@ def handle_buttons(message):
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     chatID = message.chat.id
-    document_ID = message.document.file_id
-    document_name = message.document.file_name
-
-    try:
-        # Загружаем файл
-        file_info = bot.get_file(document_ID)
-        download_file = bot.download_file(file_info.file_path)
-
-        # Сохраняем файл
-        file_path = os.path.join(test_download_folder, document_name)
-        with open(file_path, 'wb') as new_file:
-            new_file.write(download_file)
-
-        # УВЕДОМЛЯЕМ ПОЛЬЗОВАТЕЛЯ
-        bot.send_message(chatID, f"Файл '{document_name}' успешкно скачан")
-    except Exception as e:
-        bot.send_message(chatID, f"Произошла ошибка при скачивании файла: {e}")
+    username = message.from_user.username or 'Unknown'
+    io_file_operation.process_files(chatID, username)
 
 # ---= ОБРАБОТКА НЕПОДДЕРЖИВАЕМЫХ ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])
