@@ -8,3 +8,4 @@ python/prod_io/__pycache__/io_json.cpython-312.pyc
 python/prod_io/__pycache__/io_universal.cpython-312.pyc
 python/prod_io/io_main.py
 /python/prod_io/config.py
+config.py
