@@ -119,7 +119,7 @@ class DbHelper:
         vectordb = self.get_vectror_db()
 
         llm = OllamaLLM(
-            model="llama3",  temperature = "0.1")
+            model="llama3", temperature = "0.1")
 
         #print(dir(vectordb))
         data = vectordb.similarity_search(prompt,k=4)
