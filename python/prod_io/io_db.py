@@ -114,7 +114,9 @@ class DbHelper:
 
         return vectordb
 
-    def get_answer(self, vectordb, prompt):
+    def get_answer(self, prompt):
+
+        vectordb = self.get_vectror_db()
 
         llm = OllamaLLM(
             model="llama3",  temperature = "0.1")
