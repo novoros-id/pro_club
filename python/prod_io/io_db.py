@@ -5,8 +5,8 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
-from langchain.embeddings  import HuggingFaceEmbeddings
-
+#from langchain.embeddings  import HuggingFaceEmbeddings
+from langchain_huggingface  import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.config import Settings

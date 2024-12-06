@@ -1,9 +1,9 @@
 import os
 import io_json
 import io_universal
-import io_db
 import io_send_telegram
 import shutil
+from io_db import DbHelper
 
 def create_user(chat_id, user_name):
     create_folder_structure(user_name)
@@ -13,12 +13,14 @@ def create_user(chat_id, user_name):
 def process_files(chat_id, user_name):
     copy_user_files_from_input_pdf(user_name)
     #io_db.processing_user_files(chat_id, user_name)
+    db_helper = DbHelper(chat_id, user_name)
+    db_helper.processing_user_files()
     io_send_telegram.send_telegram_message(chat_id, "Файлы обработаны, можно задавать вопросы")
 
 def get_list_files(chat_id, user_name):
     input_user_files = return_user_folder_input(user_name)
     files = os.listdir(input_user_files)
-    print()
+    print(files)
     result = '\n'.join(files)
     if result == "":
         io_send_telegram.send_telegram_message(chat_id, "Файлы отсутствуют")
