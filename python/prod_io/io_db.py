@@ -85,7 +85,6 @@ class DbHelper:
             documents=separate_text,
             embedding=embedding,
             persist_directory=db_folder,
-            client_settings=Settings(anonymized_telemetry=False),
             )
         
         return True
@@ -120,7 +119,7 @@ class DbHelper:
         vectordb = self.get_vectror_db()
 
         llm = OllamaLLM(
-            model="llama3", callback_manager=CallbackManager([StreamingStdOutCallbackHandler()]), temperature = "0.1")
+            model="llama3", temperature = "0.1")
 
         #print(dir(vectordb))
         data = vectordb.similarity_search(prompt,k=4)
