@@ -121,6 +121,7 @@ class DbHelper:
         llm = OllamaLLM(
             model="llama3", temperature = "0.1")
 
+
         #print(dir(vectordb))
         data = vectordb.similarity_search(prompt,k=4)
         #embedding_vector  = OllamaLLM().embed_query(prompt) 
