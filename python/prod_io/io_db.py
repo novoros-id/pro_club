@@ -6,8 +6,11 @@ from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
 #from langchain.embeddings  import HuggingFaceEmbeddings
-from langchain_huggingface  import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
+#from langchain_huggingface  import souce
+#from langchain_community.vectorstores  import Chroma
+#from langchain_chroma import Chroma
+from langchain_community.vectorstores.chroma import Chroma
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.config import Settings
 
@@ -81,13 +84,17 @@ class DbHelper:
         if not os.path.exists(db_folder):
             return False
 
+        print ("db " + db_folder)
+        print (separate_text)
+
         vector_db = Chroma.from_documents(
             documents=separate_text,
             embedding=embedding,
-            persist_directory=db_folder,
-            client_settings=Settings(anonymized_telemetry=False),
+            persist_directory=db_folder
             )
         
+        print (vector_db)
+        vector_db.persist()
         return True
 
     def get_vectror_db(self):

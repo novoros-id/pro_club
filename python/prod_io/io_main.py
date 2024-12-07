@@ -1,7 +1,7 @@
 from io_db import DbHelper
 
 chat_id = '123'
-user_name = 'dakinfiev'
+user_name = 'a_vgn_peston'
 
 db_helper = DbHelper(chat_id, user_name)
 
