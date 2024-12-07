@@ -1,10 +1,13 @@
-import io_db
+from io_db import DbHelper
 
 chat_id = '123'
 user_name = 'dakinfiev'
 
-#io_db.processing_user_files(chat_id, user_name)
+db_helper = DbHelper(chat_id, user_name)
 
-vector_db = io_db.get_vectror_db(chat_id, user_name)
+db_helper.get_all_user_files()
+
+'''
 prompt = "Кому подарили заячий тулупчик?"
-answer_text = io_db.get_answer(chat_id, user_name, vector_db, prompt)
+answer_text = db_helper.get_answer(prompt)
+'''
