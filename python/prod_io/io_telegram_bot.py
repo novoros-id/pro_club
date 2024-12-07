@@ -1,24 +1,32 @@
 import config
 import telebot
+import io_file_operation
+import io_db
 import os
 
 bot = telebot.TeleBot(config.bot_token)
 
-#Тестовая папка для сохранения файлов
-test_download_folder = "test_download"
-if not os.path.exists(test_download_folder):
-    os.makedirs(test_download_folder)
+HELP_BUTTON = 'Помощь'
+FILES_LIST_BUTTON = 'Загруженные файлы'
+DELETE_FILES_BUTTON = 'Удалить все загруженные файлы'
 
+# ---= ОБРАБОТКА КОМАНД =---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = str(message.chat.id)
-    username = message.from_user.username or 'Unknown'
-    first_name = message.from_user.first_name or 'User'
-    # Создаем клаву
+    username = message.from_user.username
+    first_name = message.from_user.first_name
+    io_file_operation.create_user(chat_id, username)
+
+    # Создаем клавиатуру
     keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    help_button = telebot.types.KeyboardButton(text="Помощь")
-    keyboard.add(help_button)
-    bot.send_message(message.chat.id, # Отправка приветствия
+    keyboard.add(
+        telebot.types.KeyboardButton(text=HELP_BUTTON),
+        telebot.types.KeyboardButton(text=FILES_LIST_BUTTON),
+        telebot.types.KeyboardButton(text=DELETE_FILES_BUTTON),
+    )
+
+    bot.send_message(message.chat.id,
         f"Привет, {first_name}! Я MindCatcher бот. Я помогу тебе найти нужный ответ \n\n"
         , reply_markup=keyboard
     )
@@ -26,10 +34,9 @@ def send_welcome(message):
 @bot.message_handler(commands=['help'])
 def help_bot(message):
     bot.send_message(message.chat.id, 
-    "Вот что я умею:\n\n"
-        "1️⃣  Используй '/start' для возврата в Главное меню\n"
-        #"2️⃣  Используй '/ask_bot' - задать вопрос, получить ответ по базе данных (функция в разработке)\n"
-        #"3️⃣  Используй '/training' - меню обучения бота (функция в разработке)\n"
+        f'Вот что я умею:\n\n'
+        f'1️⃣  {FILES_LIST_BUTTON} - позволяет получить перечень загруженных файлов\n'
+        f'2️⃣  {DELETE_FILES_BUTTON} - выполняет полное удаление всех загруженных ранее файлов'
     )
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
@@ -37,38 +44,48 @@ def help_bot(message):
 def handle_buttons(message):
     text = message.text
     chatID = message.chat.id
-    if text == "Помощь":    
+    username = message.from_user.username
+    if text == HELP_BUTTON:    
         help_bot(message)
+    elif text == FILES_LIST_BUTTON:
+        io_file_operation.get_list_files(chatID, username)
+    elif text == DELETE_FILES_BUTTON:
+        io_file_operation.delete_all_files(chatID, username)
     else:
-        bot.send_message(chatID, f"Вы отправили сообщение: '{text}'")
-        bot.send_message(chatID, "Функции обработки запроса пока нет. Вызывай /help, там описание всех моих функций")
+        try:
+            db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
+            answer = db_helper.get_answer(prompt=text)
+            if answer:
+                bot.send_message(chatID, f'Ответ: {answer}')
+            else:
+                bot.send_message(chatID, 'Извините, я не смог сформировать ответ!')
+        except Exception as e:
+            bot.send_message(chatID, 'Произошла ошибка при обработке запроса.')
+            print(f'Ошибка в get_answer: {e}')
 
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     chatID = message.chat.id
-    document_ID = message.document.file_id
-    document_name = message.document.file_name
+    username = message.from_user.username
+    file_info = bot.get_file(message.document.file_id)
+    file_name = message.document.file_name
 
-    try:
-        # Загружаем файл
-        file_info = bot.get_file(document_ID)
-        download_file = bot.download_file(file_info.file_path)
+    dowloaded_file = bot.download_file(file_info.file_path)
+    user_input_folder = io_file_operation.return_user_folder_input(username)
+    save_path = os.path.join(user_input_folder, file_name)
+    
+    with open(save_path, 'wb') as new_file:
+        new_file.write(dowloaded_file)
 
-        # Сохраняем файл
-        file_path = os.path.join(test_download_folder, document_name)
-        with open(file_path, 'wb') as new_file:
-            new_file.write(download_file)
+    io_file_operation.process_files(chatID, username)
 
-        # УВЕДОМЛЯЕМ ПОЛЬЗОВАТЕЛЯ
-        bot.send_message(chatID, f"Файл '{document_name}' успешкно скачан")
-    except Exception as e:
-        bot.send_message(chatID, f"Произошла ошибка при скачивании файла: {e}")
+    bot.send_message(chatID, f"Файл '{file_name}' успешно загружен и обработан")
 
 # ---= ОБРАБОТКА НЕПОДДЕРЖИВАЕМЫХ ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])
 def handle_unsupported_files(message):
-    bot.send_message(message.chat.id, "Извините, я обрабатываю только документы. Пожалуйста, отправьте корректный формат файла")
+    bot.send_message(message.chat.id, "Извините, я обрабатываю только текстовые документы (например PDF, TXT или DOC). Пожалуйста, отправьте корректный формат файла")
 
 # ---= ЗАПУСК БОТА =---
 try:
@@ -78,6 +95,5 @@ except Exception as e:
     # Информация об ошибке 
     print(f"Ошибка:{e}")
 finally:
-    # Корретная остановка бота
     bot.stop_polling()
     print("БОТ ОСТАНОВЛЕН")
