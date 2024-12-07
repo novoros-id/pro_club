@@ -125,7 +125,20 @@ class DbHelper:
         data = vectordb.similarity_search(prompt,k=4)
         #embedding_vector  = OllamaLLM().embed_query(prompt) 
         #data = vectordb.similarity_search_by_vector(embedding_vector)
-        question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+        #Вы полезный ассистент. Вы отвечаете на вопросы о документации, хранящейся в
+        #question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+        question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
         text = llm.invoke([HumanMessage(content=question)])
 
         return text
+    
+    def get_free_answer (self, prompt):
+
+        llm = OllamaLLM(
+            model="llama3", temperature = "0.1")
+        question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
+        text = llm.invoke([HumanMessage(content=question)])
+
+        return text
+        
+        
