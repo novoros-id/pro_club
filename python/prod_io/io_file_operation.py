@@ -1,7 +1,7 @@
 import os
 import io_json
 import io_universal
-import io_db
+from io_db import DbHelper
 import io_send_telegram
 import shutil
 
@@ -12,8 +12,9 @@ def create_user(chat_id, user_name):
 
 def process_files(chat_id, user_name):
     copy_user_files_from_input_pdf(user_name)
-    #io_db.processing_user_files(chat_id, user_name)
-    io_send_telegram.send_telegram_message(chat_id, "Файлы обработаны, можно задавать вопросы")
+    db_helper = DbHelper(chat_id, user_name)
+    db_helper.processing_user_files()
+    #io_send_telegram.send_telegram_message(chat_id, "Файлы обработаны, можно задавать вопросы")
 
 def get_list_files(chat_id, user_name):
     input_user_files = return_user_folder_input(user_name)
@@ -30,6 +31,8 @@ def delete_all_files(chat_id, user_name):
     delete_all_files_in_folder(chat_id, input_user_files)
     pdf_user_files = return_user_folder_pdf(user_name)
     delete_all_files_in_folder(chat_id, pdf_user_files)
+    db_user_files = return_user_folder_db(user_name)
+    delete_all_files_in_folder(chat_id, db_user_files)
 
 def delete_all_files_in_folder(chat_id, folder_path):
     for filename in os.listdir(folder_path):

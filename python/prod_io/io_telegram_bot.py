@@ -27,12 +27,17 @@ def send_welcome(message):
     )
 
     bot.send_message(message.chat.id,
-        f"Привет, {first_name}! Я MindCatcher бот. Я помогу тебе найти нужный ответ \n\n"
+        f"""Привет, {first_name}! Я бот помощник. Я помогу тебе найти нужный ответ
+         Отправь мне файлы в формате PDF и задавай по ним вопросы
+          Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг \n\n"""
         , reply_markup=keyboard
     )
 
 @bot.message_handler(commands=['help'])
 def help_bot(message):
+    chat_id = str(message.chat.id)
+    username = message.from_user.username
+    io_file_operation.create_user(chat_id, username)
     bot.send_message(message.chat.id, 
         f'Вот что я умею:\n\n'
         f'1️⃣  {FILES_LIST_BUTTON} - позволяет получить перечень загруженных файлов\n'
@@ -45,6 +50,7 @@ def handle_buttons(message):
     text = message.text
     chatID = message.chat.id
     username = message.from_user.username
+    io_file_operation.create_user(chatID, username)
     if text == HELP_BUTTON:    
         help_bot(message)
     elif text == FILES_LIST_BUTTON:
@@ -52,22 +58,32 @@ def handle_buttons(message):
     elif text == DELETE_FILES_BUTTON:
         io_file_operation.delete_all_files(chatID, username)
     else:
-        try:
+        if text == "":
+            bot.send_message(chatID, 'Извините, необходимо указать запрос!')
+        elif text[0] == ".":
+            bot.send_message(chatID, 'Запрос не по текстам, необходимо немного времени на подготовку ответа')
             db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
-            answer = db_helper.get_answer(prompt=text)
-            if answer:
-                bot.send_message(chatID, f'Ответ: {answer}')
-            else:
-                bot.send_message(chatID, 'Извините, я не смог сформировать ответ!')
-        except Exception as e:
-            bot.send_message(chatID, 'Произошла ошибка при обработке запроса.')
-            print(f'Ошибка в get_answer: {e}')
+            answer = db_helper.get_free_answer(prompt=text)
+            bot.send_message(chatID, answer)
+        else:
+            bot.send_message(chatID, 'Запрос к загруженным текстам, необходимо немного времени на подготовку ответа')
+            try:
+                db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
+                answer = db_helper.get_answer(prompt=text)
+                if answer:
+                    bot.send_message(chatID, f'Ответ: {answer}')
+                else:
+                    bot.send_message(chatID, 'Извините, я не смог сформировать ответ!')
+            except Exception as e:
+                bot.send_message(chatID, 'Произошла ошибка при обработке запроса.')
+                print(f'Ошибка в get_answer: {e}')
 
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     chatID = message.chat.id
     username = message.from_user.username
+    io_file_operation.create_user(chatID, username)
     file_info = bot.get_file(message.document.file_id)
     file_name = message.document.file_name
 
