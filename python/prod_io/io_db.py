@@ -22,7 +22,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.schema import HumanMessage
 
 class LLM_Models(Enum):
-    llama3 = 'llama3'
+    Olama3 = 'llama3'
 
 @dataclass
 class Processed_Files:
@@ -184,13 +184,17 @@ class DbHelper:
 
         return vectordb
 
-    def get_answer(self, prompt):
+    def get_answer(self, prompt, llm_model: LLM_Models = None):
 
         vectordb = self.get_vectror_db()
 
-        llm = OllamaLLM(
-            model="llama3", temperature = "0.1")
+        selected_llm_model = llm_model if llm_model else self.default_model
 
+        if selected_llm_model == LLM_Models.Olama3:
+            llm = OllamaLLM(
+                model=selected_llm_model, temperature = "0.1")
+        else:
+            return 'Бот не поддерживает модель ({})'.format(llm_model.name)
 
         #print(dir(vectordb))
         data = vectordb.similarity_search(prompt,k=4)
@@ -207,8 +211,12 @@ class DbHelper:
 
         selected_llm_model = llm_model if llm_model else self.default_model
 
-        llm = OllamaLLM(
-            model=selected_llm_model, temperature = "0.1")
+        if selected_llm_model == LLM_Models.Olama3:
+            llm = OllamaLLM(
+                model=selected_llm_model, temperature = "0.1")
+        else:
+            return 'Бот не поддерживает модель ({})'.format(llm_model.name)
+        
         question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
         text = llm.invoke([HumanMessage(content=question)])
 
