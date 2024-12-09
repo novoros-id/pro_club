@@ -52,7 +52,7 @@ class ConfigLLM:
 #---------------------------------------------------
 class DbHelper:
 
-    def __init__(self, chat_id, user_name, default_model: LLM_Models = LLM_Models.llama3):
+    def __init__(self, chat_id, user_name, default_model: LLM_Models = LLM_Models.Olama3):
         self.chat_id = chat_id
         self.user_name = user_name
         self.default_model= default_model
