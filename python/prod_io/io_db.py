@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import io_file_operation
 
 from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import Docx2txtLoader
 from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
@@ -111,7 +112,7 @@ class DbHelper:
 
     def delete_all_user_db(self):
         db_user_files = io_file_operation.return_user_folder_db(self.user_name)
-        io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files)
+        io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files, True)
 
     def get_all_user_files(self):
 
@@ -130,7 +131,10 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        loader = PyPDFLoader(file_path)
+        if io_file_operation.file_is_pdf(file_path):
+            loader = PyPDFLoader(file_path)
+        elif io_file_operation.file_is_word(file_path):
+            loader = Docx2txtLoader(file_path)
         documents = loader.load()
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
