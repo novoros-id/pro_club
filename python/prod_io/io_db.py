@@ -109,6 +109,9 @@ class DbHelper:
             return
         
         with open(configLLM_full_path, 'w') as file:
+            data = json.load(file)
+            configLLM_object = configLLM_object.from_dict(data)
+            configLLM_object.processed_files.clear
             json.dump(configLLM_object.to_dict(), file, indent=4)
 
     def delete_all_user_db(self):
