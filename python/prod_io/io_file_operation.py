@@ -69,12 +69,37 @@ def file_is_word(file_path):
         print('Файл не имеет расширения Doc.')
         return False
     
+def  return_zakroma_folder():  
+    main_folder_path = io_json.get_config_value("main_folder_path")
+    zakroma_folder = "_zakroma_folder"
+    subfolder_path = os.path.join(main_folder_path, zakroma_folder)
+    if not os.path.exists(subfolder_path):
+        os.makedirs(subfolder_path)
+    return subfolder_path
+
+def copy_files_to_zakroma(folder_source):
+    zakroma_folder = return_zakroma_folder()
+
+    files = os.listdir(folder_source)
+    
+    for file in files:
+        source_file_path = os.path.join(folder_source, file)
+        destination_file_path = os.path.join(zakroma_folder, file)         
+        try:
+            # Перемещаем файл
+            shutil.copy(source_file_path, destination_file_path)
+            print(f"Файл {file} успешно скопирован.")
+        except Exception as e:
+            print(f"Ошибка при копировании файла {file}: {e}")
 
 def delete_all_files(chat_id, user_name):
     input_user_files = return_user_folder_input(user_name)
     delete_all_files_in_folder(chat_id, input_user_files)
+
     pdf_user_files = return_user_folder_pdf(user_name)
+    copy_files_to_zakroma(pdf_user_files)
     delete_all_files_in_folder(chat_id, pdf_user_files)
+
     db_helper = io_db.DbHelper(chat_id, user_name)
     db_helper.delete_all_user_db()
     #db_user_files = return_user_folder_db(user_name)
