@@ -97,7 +97,7 @@ class DbHelper:
             data = json.load(file)
             configLLM_object = configLLM_object.from_dict(data)
 
-            return configLLM_object
+        return configLLM_object
         
     def save_to_configLLM_file(self, configLLM_object: ConfigLLM):
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
@@ -106,12 +106,25 @@ class DbHelper:
             return
         
         with open(configLLM_full_path, 'w') as file:
+            data = json.load(file)
+            configLLM_object = configLLM_object.from_dict(data)
+            configLLM_object.processed_files.clear
             json.dump(configLLM_object.to_dict(), file, indent=4)
-
 
     def delete_all_user_db(self):
         db_user_files = io_file_operation.return_user_folder_db(self.user_name)
         io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files)
+        self.delete_proocessed_files_in_config()
+
+    def delete_proocessed_files_in_config(self):
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
+        configLLM_full_path = os.path.join(user_folder_path, 'configLLM.json')
+        configLLM_object = ConfigLLM()
+        if not os.path.exists(configLLM_full_path):
+            # create confilLLM file
+           with open(configLLM_full_path, 'w') as file:
+                json.dump(configLLM_object.to_dict(), file, indent=4)
+
 
     def get_all_user_files(self):
 
