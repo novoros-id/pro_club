@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import io_file_operation
 
 from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import Docx2txtLoader
 from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
@@ -14,6 +15,8 @@ from langchain.embeddings  import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 #from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from chromadb.config import Settings
+
+from sentence_transformers import SentenceTransformer
 
 from langchain_ollama import OllamaLLM
 from langchain.callbacks.manager import CallbackManager
@@ -76,7 +79,7 @@ class DbHelper:
         
         for file_item in pdf_files_list:
             separate_text = self.separate_file(file_item)
-            embedding = self.get_embeddings_from_separate_text(separate_text)
+            embedding = self.get_embeddings()
             self.put_vector_in_db(separate_text, embedding)
             #check file as processed
             configLLM_object.processed_files.append(Processed_Files(name=file_item))
@@ -97,7 +100,7 @@ class DbHelper:
             data = json.load(file)
             configLLM_object = configLLM_object.from_dict(data)
 
-            return configLLM_object
+        return configLLM_object
         
     def save_to_configLLM_file(self, configLLM_object: ConfigLLM):
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
@@ -108,10 +111,20 @@ class DbHelper:
         with open(configLLM_full_path, 'w') as file:
             json.dump(configLLM_object.to_dict(), file, indent=4)
 
-
     def delete_all_user_db(self):
         db_user_files = io_file_operation.return_user_folder_db(self.user_name)
-        io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files)
+        io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files, True)
+        self.delete_proocessed_files_in_config()
+
+    def delete_proocessed_files_in_config(self):
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
+        configLLM_full_path = os.path.join(user_folder_path, 'configLLM.json')
+        configLLM_object = ConfigLLM()
+        if os.path.exists(configLLM_full_path):
+            # create confilLLM file
+           with open(configLLM_full_path, 'w') as file:
+                json.dump(configLLM_object.to_dict(), file, indent=4)
+
 
     def get_all_user_files(self):
 
@@ -130,7 +143,17 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        loader = PyPDFLoader(file_path)
+        basename, extension = os.path.splitext(file_path)
+
+        match extension:
+            case ".docx":
+                loader = Docx2txtLoader(file_path)
+            case ".pdf":  
+                loader = PyPDFLoader(file_path)
+            case _:
+                print(f"Данный файл не поддерживается {file_path}")
+                return []
+
         documents = loader.load()
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
@@ -138,11 +161,13 @@ class DbHelper:
 
         return documents
 
-    def get_embeddings_from_separate_text(self, separate_text):
+    def get_embeddings(self):
+
+        model_name = "cointegrated/LaBSE-en-ru"
 
         hf_embeddings_model = HuggingFaceEmbeddings(
             #todo: need parametr for model_kwargs
-        model_name="cointegrated/LaBSE-en-ru", model_kwargs={"device": "cpu"})
+        model_name=model_name, model_kwargs={"device": "cpu"})
 
         return hf_embeddings_model
 
@@ -208,7 +233,7 @@ class DbHelper:
         return text
     
     def get_free_answer (self, prompt, llm_model: LLM_Models = None):
-
+        
         selected_llm_model = llm_model if llm_model else self.default_model
 
         if selected_llm_model == LLM_Models.Olama3:
@@ -219,7 +244,18 @@ class DbHelper:
         
         question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
         text = llm.invoke([HumanMessage(content=question)])
-
+        
+        '''
+        model_name = "cointegrated/LaBSE-en-ru"
+        model = SentenceTransformer(model_name)
+        question = [prompt]
+        embedings = model.encode(question)
+  
+        llm = OllamaLLM(
+                model=embedings, temperature = "0.1")
+        
+        text = llm.invoke([HumanMessage(content=question)])
+        '''
         return text
         
         
