@@ -3,7 +3,82 @@ import telebot
 import io_file_operation
 import io_db
 import os
+import json
+import pandas
+import datetime
 
+
+# ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
+class LogManager:
+    def __init__(self, logs_folder_path, logs_file_name):
+        self.logs_folder_path = logs_folder_path
+        self.logs_file_name = os.path.join(logs_folder_path, logs_file_name)
+        self.logs = self._initialize_logs()
+
+    def _initialize_logs(self):
+        if not os.path.exists(self.logs_folder_path):
+            os.makedirs(self.logs_folder_path)
+        if not os.path.exists(self.logs_file_name):
+            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+            return logs    
+        # Если файл существует, читаем его    
+        try:
+            return pandas.read_csv(self.logs_file_name, encoding='utf-8')
+        except Exception as e:
+            print(f"Ошибка при чтении логов: {e}")
+            return pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+        
+    def log_rating(self, chat_id, rating):
+        # Убедимся, что колонка rating имеет тип object
+        if 'rating' in self.logs.columns and self.logs['rating'].dtype != 'object':
+            self.logs['rating'] = self.logs['rating'].astype('object')
+
+        # Обновляем запись в логах, по соответствующему chat_id
+        if not self.logs.empty:
+            # Находим последнюю запись в логах для этого chat_id
+            self.logs.loc[self.logs['chat_id'] == chat_id, 'rating'] = rating
+            print(f'[DEBUG] Оценка сохранена: {rating}')
+        else:
+            print(f'[DEBUG] Логи пусты, оценка не записана')
+            
+        # Сохраняем логи
+        try:
+            self.logs.to_csv(self.logs_file_name, index=False, encoding='UTF-8')
+        except Exception as e:
+            print(f'Ошибка при сохранении логов: {e}')
+
+    def log_interaction(self, request_time, chat_id, user_name, request_text, response_time, response_text, used_files_path, rating=None):
+        used_files_str = ", ".join(os.listdir(used_files_path)) if os.path.exists(used_files_path) else "Папка не создана"
+        print(f'[DEBUG] Список файлов для логов: {used_files_str}')
+        # Создаем запись логов
+        new_array = pandas.DataFrame([{
+            'request_time'  : request_time,
+            'chat_id'       : chat_id,
+            'user_name'     : user_name,
+            'request_text'  : request_text,
+            'response_time' : response_time,
+            'response_text' : response_text,
+            'used_files'    : used_files_str,
+            'rating'        : rating
+        }])
+
+        if self.logs.empty:
+            self.logs = new_array
+        else:
+            self.logs = pandas.concat([self.logs, new_array], ignore_index=True)
+
+        try:
+            self.logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+        except Exception as e:
+            print(f'Ошибка при создании логов: {e}')
+
+# ---= ИНИЦИАЛИЗАЦИЯ БОТА =---
+with open ('config.json', 'r') as config_file:
+    config_data = json.load(config_file)
+
+logs_folder_path = config_data.get('logs_folder_path')
+logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
 bot = telebot.TeleBot(config.bot_token)
 
 HELP_BUTTON = 'Помощь'
@@ -18,7 +93,6 @@ def send_welcome(message):
     first_name = message.from_user.first_name
     io_file_operation.create_user(chat_id, username)
 
-    # Создаем клавиатуру
     keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(
         telebot.types.KeyboardButton(text=HELP_BUTTON),
@@ -28,8 +102,8 @@ def send_welcome(message):
 
     bot.send_message(message.chat.id,
         f"""Привет, {first_name}! Я бот помощник. Я помогу тебе найти нужный ответ
-         Отправь мне файлы в формате PDF и задавай по ним вопросы
-          Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг \n\n"""
+        Отправь мне файлы в формате PDF и задавай по ним вопросы
+        Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг \n\n"""
         , reply_markup=keyboard
     )
 
@@ -51,6 +125,8 @@ def handle_buttons(message):
     chatID = message.chat.id
     username = message.from_user.username
     io_file_operation.create_user(chatID, username)
+    request_time = datetime.datetime.now()
+
     if text == HELP_BUTTON:    
         help_bot(message)
     elif text == FILES_LIST_BUTTON:
@@ -59,24 +135,47 @@ def handle_buttons(message):
         io_file_operation.delete_all_files(chatID, username)
     else:
         if text == "":
-            bot.send_message(chatID, 'Извините, необходимо указать запрос!')
+            response_text = (chatID, 'Извините, необходимо указать запрос!')
+            bot.send_message(chatID, response_text)
         elif text[0] == ".":
             bot.send_message(chatID, 'Запрос не по текстам, необходимо немного времени на подготовку ответа')
             db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
-            answer = db_helper.get_free_answer(prompt=text)
-            bot.send_message(chatID, answer)
+            response_text = db_helper.get_free_answer(prompt=text)
+            bot.send_message(chatID, response_text)
         else:
-            bot.send_message(chatID, 'Запрос к загруженным текстам, необходимо немного времени на подготовку ответа')
+            bot.send_message (chatID, 'Запрос к загруженным текстам, необходимо немного времени на подготовку ответа')
             try:
                 db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
                 answer = db_helper.get_answer(prompt=text)
                 if answer:
-                    bot.send_message(chatID, f'Ответ: {answer}')
+                    response_text = f'Ответ: {answer}\n\n Пожалуйста, оцените качество ответа:'
+                    input_user_files = io_file_operation.return_user_folder_input(username)
+
+                    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
+                    keyboard.add(
+                        telebot.types.InlineKeyboardButton('👍', callback_data=f'rate_{chatID}_up'),
+                        telebot.types.InlineKeyboardButton('👎', callback_data=f'rate_{chatID}_down')
+                    )
+                    bot.send_message(chatID, response_text, reply_markup=keyboard)
                 else:
-                    bot.send_message(chatID, 'Извините, я не смог сформировать ответ!')
+                    response_text = 'Извините, я не смог сформировать ответ!'
+                    bot.send_message(chatID, response_text)
             except Exception as e:
-                bot.send_message(chatID, 'Произошла ошибка при обработке запроса.')
+                response_text = 'Произошла ошибка при обработке запроса.'
+                bot.send_message(chatID, response_text)
                 print(f'Ошибка в get_answer: {e}')
+    
+    #Логируем действия
+        logs_manager.log_interaction(
+            request_time    =request_time,
+            chat_id         =chatID,
+            user_name       =username,
+            request_text    =text,
+            response_time   =datetime.datetime.now(),
+            response_text   =response_text,
+            used_files_path =input_user_files,
+            rating=None
+    )
 
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
@@ -102,6 +201,18 @@ def handle_document(message):
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])
 def handle_unsupported_files(message):
     bot.send_message(message.chat.id, "Извините, я обрабатываю только текстовые документы (например PDF, TXT или DOC). Пожалуйста, отправьте корректный формат файла")
+
+# ---= ОБРАБОТКА ОЦЕНКИ ОТВЕТОВ =---
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))
+def handle_rating(call):
+    # Получаем данные из callback_data
+    _, chat_id, rating = call.data.split('_')  #Например, rate_12321321_up
+    chat_id = int(chat_id)
+    rating_value = '👍' if rating == 'up' else '👎'
+
+    logs_manager.log_rating(chat_id=chat_id, rating=rating_value)
+
+    bot.answer_callback_query(call.id, f'Вы выбрали оценку:{rating_value}')
 
 # ---= ЗАПУСК БОТА =---
 try:
