@@ -126,7 +126,8 @@ def handle_buttons(message):
     username = message.from_user.username
     io_file_operation.create_user(chatID, username)
     request_time = datetime.datetime.now()
-
+    input_user_files = io_file_operation.return_user_folder_input(username)
+    
     if text == HELP_BUTTON:    
         help_bot(message)
     elif text == FILES_LIST_BUTTON:
@@ -149,7 +150,6 @@ def handle_buttons(message):
                 answer = db_helper.get_answer(prompt=text)
                 if answer:
                     response_text = f'Ответ: {answer}\n\n Пожалуйста, оцените качество ответа:'
-                    input_user_files = io_file_operation.return_user_folder_input(username)
 
                     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
                     keyboard.add(
