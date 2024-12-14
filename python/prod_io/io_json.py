@@ -2,7 +2,7 @@ import json
 import os
 
 def get_config_value(key):
-    filename = "python/prod_io/config.json"
+    filename = "E:\\Клуб разработчиков\\VS\\pro_club\\python\\prod_io\\config.json"
     with open(filename, 'r') as file:
         data = json.load(file)
         return data.get(key)
