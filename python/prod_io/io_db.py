@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass, field
 import io_file_operation
 import io_json
+import io_separate_file
 
 
 from langchain.document_loaders import PyPDFLoader
@@ -154,23 +155,28 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        basename, extension = os.path.splitext(file_path)
+        class_name_separate_file = io_json.get_config_value("class_name_separate_file")
+        separate_class = getattr(io_separate_file, class_name_separate_file)
+        separate_object = separate_class(file_path)
+        return separate_object.separate_file()
 
-        match extension:
-            case ".docx":
-                loader = Docx2txtLoader(file_path)
-            case ".pdf":  
-                loader = PyPDFLoader(file_path)
-            case _:
-                print(f"Данный файл не поддерживается {file_path}")
-                return []
+        # basename, extension = os.path.splitext(file_path)
 
-        documents = loader.load()
+        # match extension:
+        #     case ".docx":
+        #         loader = Docx2txtLoader(file_path)
+        #     case ".pdf":  
+        #         loader = PyPDFLoader(file_path)
+        #     case _:
+        #         print(f"Данный файл не поддерживается {file_path}")
+        #         return []
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
-        documents = text_splitter.split_documents(documents)
+        # documents = loader.load()
 
-        return documents
+        # text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
+        # documents = text_splitter.split_documents(documents)
+
+        # return documents
 
     def get_embeddings(self):
 

@@ -1,8 +1,6 @@
 {
     "main_folder_path": "/Users/alexeyvaganov/doc/files/folder_io_project",
-    "other_setting_1": "value_1",
-    "other_setting_2": true,
-    "other_setting_3": ["item1", "item2"],
     "logs_folder_path": "/Users/alexeyvaganov/doc/files/folder_io_project",
-    "model":"llama3.2"
+    "model":"llama3.2",
+    "class_name_separate_file": "sf_151224_2000_250"
   }
