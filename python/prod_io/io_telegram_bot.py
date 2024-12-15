@@ -102,7 +102,7 @@ def send_welcome(message):
 
     bot.send_message(message.chat.id,
         f"""Привет, {first_name}! Я бот помощник. Я помогу тебе найти нужный ответ
-        Отправь мне файлы в формате PDF и задавай по ним вопросы
+        Отправь мне файлы в формате PDF или DOCX и задавай по ним вопросы
         Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг \n\n"""
         , reply_markup=keyboard
     )
@@ -144,7 +144,7 @@ def handle_buttons(message):
             response_text = db_helper.get_free_answer(prompt=text)
             bot.send_message(chatID, response_text)
         else:
-            bot.send_message (chatID, 'Запрос к загруженным текстам, необходимо немного времени на подготовку ответа')
+            bot.send_message (chatID, 'Запрос к загруженным текстам, это тестовый сервер и для ответа необходимо более одной минуты. Вы можете перейти к другим задачам, а когда я буду готов, то Вам придет оповещение')
             try:
                 db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
                 answer = db_helper.get_answer(prompt=text)
