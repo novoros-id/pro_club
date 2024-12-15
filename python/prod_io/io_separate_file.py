@@ -30,7 +30,7 @@ class sf_default:
 
         return documents
     
-class sf_151224_2000_250:
+class sf_151224_500_100_podg:
     def __init__(self, file_path):
         self.file_path = file_path
     def separate_file(self):
@@ -54,7 +54,12 @@ class sf_151224_2000_250:
 
         documents = loader.load()
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=250,)
+        # pages = []
+        # for doc in documents:
+        #     cleaned_document = doc.replace('\n', '')
+        #     pages.append(cleaned_document)
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100,)
         documents = text_splitter.split_documents(documents)
 
         return documents
