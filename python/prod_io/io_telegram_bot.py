@@ -6,6 +6,7 @@ import os
 import json
 import pandas
 import datetime
+import io_json
 
 
 # ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
@@ -74,10 +75,11 @@ class LogManager:
             print(f'Ошибка при создании логов: {e}')
 
 # ---= ИНИЦИАЛИЗАЦИЯ БОТА =---
-with open ('config.json', 'r') as config_file:
-    config_data = json.load(config_file)
+# with open ('config.json', 'r') as config_file:
+#     config_data = json.load(config_file)
 
-logs_folder_path = config_data.get('logs_folder_path')
+# logs_folder_path = config_data.get('logs_folder_path')
+logs_folder_path = io_json.get_config_value('logs_folder_path')
 logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
 bot = telebot.TeleBot(config.bot_token)
 
