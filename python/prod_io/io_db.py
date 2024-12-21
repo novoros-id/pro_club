@@ -4,6 +4,8 @@ from enum import Enum
 import json
 from dataclasses import dataclass, field
 import io_file_operation
+import io_json
+import io_separate_file
 
 from langchain.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import Docx2txtLoader
@@ -25,7 +27,8 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.schema import HumanMessage
 
 class LLM_Models(Enum):
-    Olama3 = 'llama3'
+    #Olama3 = 'llama3'
+    Olama3 = io_json.get_config_value("model")
 
 @dataclass
 class Processed_Files:
@@ -62,9 +65,12 @@ class DbHelper:
 
     def processing_user_files(self, processing_all_files: Optional[bool]=False):
 
+        print (" - start - ")
         configLLM_object = self.get_configLLM_file()
+        print (" - get_configLLM_file - ")
 
         all_pdf_file_list = self.get_all_user_files()
+        print (" - get_all_user_files - ")
         if processing_all_files:
             pdf_files_list = all_pdf_file_list
             configLLM_object.processed_files.clear
@@ -73,14 +79,19 @@ class DbHelper:
             set_difference = set(all_pdf_file_list) - set([file.name for file in configLLM_object.processed_files])
             pdf_files_list = list(set_difference)
 
+
         if len(pdf_files_list) == 0:
             #todo show user error
             return
-        
+
         for file_item in pdf_files_list:
+            print (" - file_item - ")
             separate_text = self.separate_file(file_item)
+            print (" - separate_file - ")
             embedding = self.get_embeddings()
+            print (" - get_embeddings - ")
             self.put_vector_in_db(separate_text, embedding)
+            print (" - put_vector_in_db - ")
             #check file as processed
             configLLM_object.processed_files.append(Processed_Files(name=file_item))
     
@@ -143,23 +154,28 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        basename, extension = os.path.splitext(file_path)
+        class_name_separate_file = io_json.get_config_value("class_name_separate_file")
+        separate_class = getattr(io_separate_file, class_name_separate_file)
+        separate_object = separate_class(file_path)
+        return separate_object.separate_file()
 
-        match extension:
-            case ".docx":
-                loader = Docx2txtLoader(file_path)
-            case ".pdf":  
-                loader = PyPDFLoader(file_path)
-            case _:
-                print(f"Данный файл не поддерживается {file_path}")
-                return []
+        # basename, extension = os.path.splitext(file_path)
 
-        documents = loader.load()
+        # match extension:
+        #     case ".docx":
+        #         loader = Docx2txtLoader(file_path)
+        #     case ".pdf":  
+        #         loader = PyPDFLoader(file_path)
+        #     case _:
+        #         print(f"Данный файл не поддерживается {file_path}")
+        #         return []
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
-        documents = text_splitter.split_documents(documents)
+        # documents = loader.load()
 
-        return documents
+        # text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
+        # documents = text_splitter.split_documents(documents)
+
+        # return documents
 
     def get_embeddings(self):
 
@@ -210,11 +226,12 @@ class DbHelper:
         return vectordb
 
     def get_answer(self, prompt, llm_model: LLM_Models = None):
-
+        print (" - start - ")
         vectordb = self.get_vectror_db()
-
+        print (" - get_vectror_db - ")
         selected_llm_model = llm_model if llm_model else self.default_model
 
+        print (" - selected_llm_model - ")
         if selected_llm_model == LLM_Models.Olama3:
             llm = OllamaLLM(
                 model=selected_llm_model, temperature = "0.1")
@@ -222,14 +239,18 @@ class DbHelper:
             return 'Бот не поддерживает модель ({})'.format(llm_model.name)
 
         #print(dir(vectordb))
+        print (" - start similarity_search - ")
         data = vectordb.similarity_search(prompt,k=4)
+        print (" - stop similarity_search - ")
         #embedding_vector  = OllamaLLM().embed_query(prompt) 
         #data = vectordb.similarity_search_by_vector(embedding_vector)
         #Вы полезный ассистент. Вы отвечаете на вопросы о документации, хранящейся в
         #question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
         question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+        print (question)
+        print (" - start invoke - ")
         text = llm.invoke([HumanMessage(content=question)])
-
+        print (" - stop invoke - ")
         return text
     
     def get_free_answer (self, prompt, llm_model: LLM_Models = None):
@@ -243,8 +264,10 @@ class DbHelper:
             return 'Бот не поддерживает модель ({})'.format(llm_model.name)
         
         question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
+        print (" - start invoke - ")
         text = llm.invoke([HumanMessage(content=question)])
-        
+        print (" - stop invoke - ")
+
         '''
         model_name = "cointegrated/LaBSE-en-ru"
         model = SentenceTransformer(model_name)
