@@ -112,8 +112,10 @@ class DbHelper:
             json.dump(configLLM_object.to_dict(), file, indent=4)
 
     def delete_all_user_db(self):
-        db_user_files = io_file_operation.return_user_folder_db(self.user_name)
-        io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files, True)
+        #db_user_files = io_file_operation.return_user_folder_db(self.user_name)
+        #io_file_operation.delete_all_files_in_folder(self.chat_id, db_user_files, True)
+        vectordb = self.get_vectror_db()
+        vectordb._client.delete_collection("main")
         self.delete_proocessed_files_in_config()
 
     def delete_proocessed_files_in_config(self):
@@ -183,6 +185,7 @@ class DbHelper:
             return False
 
         vector_db = Chroma.from_documents(
+            collection_name = "main",
             documents=separate_text,
             embedding=embedding,
             persist_directory=db_folder,
@@ -205,7 +208,7 @@ class DbHelper:
         hf_embeddings_model = HuggingFaceEmbeddings(
             model_name="cointegrated/LaBSE-en-ru", model_kwargs={"device": "cpu"})
 
-        vectordb = Chroma(persist_directory=db_folder, embedding_function=hf_embeddings_model)
+        vectordb = Chroma(collection_name = "main", persist_directory=db_folder, embedding_function=hf_embeddings_model)
 
         return vectordb
 
