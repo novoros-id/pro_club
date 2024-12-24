@@ -7,6 +7,7 @@ import json
 import pandas
 import datetime
 import io_json
+import re
 
 
 # ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
@@ -130,8 +131,37 @@ def handle_buttons(message):
     io_file_operation.create_user(chatID, username)
     request_time = datetime.datetime.now()
     input_user_files = io_file_operation.return_user_folder_input(username)
-    
-    if text == HELP_BUTTON:    
+
+    if text.startswith ('$get_user'):
+        try:
+            users = io_json.get_user_folder("main_folder_path")
+            if users:
+                response_text = f'Список доступных пользователей:\n{chr(10).join(users)}'
+            else:
+                response_text = 'Нет доступных пользователей'
+        except Exception as e:
+            response_text = f'Ошибка при получении списка пользоваталей: {e}'
+        bot.send_message (chatID, response_text)
+
+    elif re.match(r'\$(\w+)\s(.+)', text):
+        try:
+            match = re.match(r'\$(\w+)\s(.+)', text)
+            
+            substitution_user_id = match.group(1) # user_id другого пользователя
+            substitution_query =  match.group(2) # Запрос, который задаем от другого пользователя
+
+            # Обрабатываем запрос от другого пользователя
+            db_helper = io_db.DbHelper(chat_id=substitution_user_id, user_name=substitution_user_id)
+            #TODO Переделать на user_id когда будет поправлена процедура DbHelper
+            #db_helper = io_db.DbHelper(chat_id=substitution_user_id)
+            answer = db_helper.get_answer(prompt=substitution_query)
+
+            bot.send_message(chatID, f'Запрос от имени пользователя: {substitution_user_id}: \n {substitution_query}\n\Ответ: {answer}')
+        except Exception as e:
+            bot.send_message(chatID, f'Произошла ошибка: {e}')
+            print(f'Ошибка в обработке от имени другого пользователя: {e}')
+        return
+    elif text == HELP_BUTTON:    
         help_bot(message)
     elif text == FILES_LIST_BUTTON:
         io_file_operation.get_list_files(chatID, username)
@@ -141,7 +171,7 @@ def handle_buttons(message):
         if text == "":
             response_text = (chatID, 'Извините, необходимо указать запрос!')
             bot.send_message(chatID, response_text)
-        elif text[0] == ".":
+        elif text.startswith ('$'):
             bot.send_message(chatID, 'Запрос не по текстам, необходимо немного времени на подготовку ответа')
             db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
             response_text = db_helper.get_free_answer(prompt=text)
@@ -160,6 +190,17 @@ def handle_buttons(message):
                         telebot.types.InlineKeyboardButton('👎', callback_data=f'rate_{chatID}_down')
                     )
                     bot.send_message(chatID, response_text, reply_markup=keyboard)
+                    #Логируем действия
+                    logs_manager.log_interaction(
+                        request_time    =request_time,
+                        chat_id         =chatID,
+                        user_name       =username,
+                        request_text    =text,
+                        response_time   =datetime.datetime.now(),
+                        response_text   =response_text,
+                        used_files_path =input_user_files,
+                        rating          =None
+                    )
                 else:
                     response_text = 'Извините, я не смог сформировать ответ!'
                     bot.send_message(chatID, response_text)
@@ -168,17 +209,6 @@ def handle_buttons(message):
                 bot.send_message(chatID, response_text)
                 print(f'Ошибка в get_answer: {e}')
     
-    #Логируем действия
-        logs_manager.log_interaction(
-            request_time    =request_time,
-            chat_id         =chatID,
-            user_name       =username,
-            request_text    =text,
-            response_time   =datetime.datetime.now(),
-            response_text   =response_text,
-            used_files_path =input_user_files,
-            rating=None
-    )
 
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
