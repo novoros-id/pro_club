@@ -6,6 +6,22 @@ def get_config_value(key):
     with open(filename, 'r') as file:
         data = json.load(file)
         return data.get(key)
+
+def get_user_folder(key):
+    """
+    Возвращает список папок (пользователей) из дериктории указаной в конфиге.
+    :key: Ключ указанный в конфиге, содержащий путь к дериктории.
+    :return: Список имен папок в указанной дериктории
+    """
+    try:
+        folder_path = get_config_value(key)
+
+        if folder_path and os.path.exists(folder_path):
+            return [folder for folder in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, folder))]
+        else:
+            raise FileNotFoundError(f'Путь {folder_path} из конфигурации не найден или не существует')
+    except Exception as e:
+        raise RuntimeError(f'Ошибка при получении списка папок пользователей: {e}')   
     
 def create_file_user_config (user_name):
     import io_file_operation
