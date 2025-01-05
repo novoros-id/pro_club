@@ -82,6 +82,7 @@ class LogManager:
 # logs_folder_path = config_data.get('logs_folder_path')
 logs_folder_path = io_json.get_config_value('logs_folder_path')
 logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
+task_for_test_folder = io_json.get_config_value('task_for_test')
 bot = telebot.TeleBot(config.bot_token)
 
 HELP_BUTTON = 'Помощь'
@@ -122,6 +123,56 @@ def help_bot(message):
         f'2️⃣  {DELETE_FILES_BUTTON} - выполняет полное удаление всех загруженных ранее файлов'
     )
 
+#  --= ТЕСТОВЫЙ КОНВЕйЕР =---
+# Функция чтения файла для тестов
+def read_test_excel_file (file_name):
+    if not os.path.exists(task_for_test_folder):
+        os.makedirs(task_for_test_folder)
+
+    file_path = os.path.join(task_for_test_folder, file_name)
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Файл '{file_name}' отсутствует в папке '{task_for_test_folder}'.")
+    
+    try:
+        data_frame = pandas.read_excel(file_path)
+    except Exception as e:
+        raise ValueError(f'Ошибка при чтении Excel-файла: {e}')
+    
+    required_columns = {'Question', 'Answer','Source'}
+    if not required_columns.issubset(data_frame.columns):
+        raise ValueError(f'Отсутствуют необходимые колонки в файле: {required_columns - set(data_frame)}')
+    
+    return data_frame
+
+# Функция обработки команды $start_pipoline
+def handle_start_pipline(chatID):
+
+    try:
+        test_data =read_test_excel_file("prime.xlsx")
+        response_text = f'Файл с тестами загружен! Количество тестов: {len(test_data)}'
+        bot.send_message(chatID, response_text)
+
+        #Извлечение уникальных значений из колонки 'Source'
+        if 'Source' in test_data.columns:
+            unique_sources = test_data['Source'].dropna().unique().tolist()
+            sources_text = '\n'.join(unique_sources)
+            response_text = (f'Следующие файлы из колонки "Source" будут использоваться в тестах:\n{sources_text}')
+
+            #Сохраняем уникальные значения в глобальную переменную
+            global unique_source_files
+            unique_sources_files = unique_sources
+            bot.send_message(chatID, response_text)
+
+        else:
+            bot.send_message(chatID, 'Колонка "Source" в файле отсутствует')
+
+    except FileNotFoundError as fnf_error:
+        bot.send_message (chatID, str(fnf_error))
+
+    except Exception as e:
+        bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
+
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
 def handle_buttons(message):
@@ -135,13 +186,17 @@ def handle_buttons(message):
     if text.startswith ('$get_user'):
         try:
             users = io_json.get_user_folder("main_folder_path")
-            if users:
+            if isinstance(users, list) and users:
                 response_text = f'Список доступных пользователей:\n{chr(10).join(users)}'
+
             else:
                 response_text = 'Нет доступных пользователей'
         except Exception as e:
-            response_text = f'Ошибка при получении списка пользоваталей: {e}'
+            response_text = f'Ошибка при получении списка пользователей: {e}'
         bot.send_message (chatID, response_text)
+
+    elif text.startswith ('$start_pipline'):
+        handle_start_pipline(chatID)
 
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
@@ -161,21 +216,27 @@ def handle_buttons(message):
             bot.send_message(chatID, f'Произошла ошибка: {e}')
             print(f'Ошибка в обработке от имени другого пользователя: {e}')
         return
+    
     elif text == HELP_BUTTON:    
         help_bot(message)
+
     elif text == FILES_LIST_BUTTON:
         io_file_operation.get_list_files(chatID, username)
+
     elif text == DELETE_FILES_BUTTON:
         io_file_operation.delete_all_files(chatID, username)
+
     else:
-        if text == "":
+        if not text.strip():
             response_text = (chatID, 'Извините, необходимо указать запрос!')
             bot.send_message(chatID, response_text)
+
         elif text.startswith ('$'):
-            bot.send_message(chatID, 'Запрос не по текстам, необходимо немного времени на подготовку ответа')
+            bot.send_message(chatID, 'Запрос не по текстам. Подготовка ответа может занять некоторое время...')
             db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
             response_text = db_helper.get_free_answer(prompt=text)
             bot.send_message(chatID, response_text)
+
         else:
             bot.send_message (chatID, 'Запрос к загруженным текстам, это тестовый сервер и для ответа необходимо более одной минуты. Вы можете перейти к другим задачам, а когда я буду готов, то Вам придет оповещение')
             try:
@@ -201,6 +262,7 @@ def handle_buttons(message):
                         used_files_path =input_user_files,
                         rating          =None
                     )
+
                 else:
                     response_text = 'Извините, я не смог сформировать ответ!'
                     bot.send_message(chatID, response_text)
