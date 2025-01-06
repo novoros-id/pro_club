@@ -161,11 +161,20 @@ def handle_start_pipline(chatID):
 
             #Сохраняем уникальные значения в глобальную переменную
             global unique_source_files
-            unique_sources_files = unique_sources
+            unique_source_files = unique_sources
             bot.send_message(chatID, response_text)
-
+            
         else:
             bot.send_message(chatID, 'Колонка "Source" в файле отсутствует')
+        
+        # Формирование лог-файла
+        current_time = datetime.datetime.now()
+        log_file_name = f'test_pipline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        log_file_path = os.path.join(logs_folder_path, log_file_name)
+
+        # Создание лог-файла
+        test_data.to_csv(log_file_path, index=False, encoding='UTF-8')
+        bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
 
     except FileNotFoundError as fnf_error:
         bot.send_message (chatID, str(fnf_error))
