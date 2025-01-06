@@ -30,7 +30,23 @@ class LogManager:
         except Exception as e:
             print(f"Ошибка при чтении логов: {e}")
             return pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+
+    # При $start_pipline создаем отдельный файл с логами
+    def create_log_pipline(self):
+        current_time = datetime.datetime.now()
+        log_file_name = f'test_pipline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        log_file_path = os.path.join(self.logs_folder_path, log_file_name)
         
+        try:
+            pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating']).to_csv(
+                log_file_path, index=False, encoding='utf-8'
+            )
+        except Exception as e:
+            print(f'Ошибка при создании файла тестовых логов: {e}')
+            raise
+
+        return log_file_name
+
     def log_rating(self, chat_id, rating):
         # Убедимся, что колонка rating имеет тип object
         if 'rating' in self.logs.columns and self.logs['rating'].dtype != 'object':
@@ -40,9 +56,6 @@ class LogManager:
         if not self.logs.empty:
             # Находим последнюю запись в логах для этого chat_id
             self.logs.loc[self.logs['chat_id'] == chat_id, 'rating'] = rating
-            print(f'[DEBUG] Оценка сохранена: {rating}')
-        else:
-            print(f'[DEBUG] Логи пусты, оценка не записана')
             
         # Сохраняем логи
         try:
@@ -52,7 +65,7 @@ class LogManager:
 
     def log_interaction(self, request_time, chat_id, user_name, request_text, response_time, response_text, used_files_path, rating=None):
         used_files_str = ", ".join(os.listdir(used_files_path)) if os.path.exists(used_files_path) else "Папка не создана"
-        print(f'[DEBUG] Список файлов для логов: {used_files_str}')
+
         # Создаем запись логов
         new_array = pandas.DataFrame([{
             'request_time'  : request_time,
@@ -76,10 +89,6 @@ class LogManager:
             print(f'Ошибка при создании логов: {e}')
 
 # ---= ИНИЦИАЛИЗАЦИЯ БОТА =---
-# with open ('config.json', 'r') as config_file:
-#     config_data = json.load(config_file)
-
-# logs_folder_path = config_data.get('logs_folder_path')
 logs_folder_path = io_json.get_config_value('logs_folder_path')
 logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
 task_for_test_folder = io_json.get_config_value('task_for_test')
@@ -147,6 +156,7 @@ def read_test_excel_file (file_name):
 
 # Функция обработки команды $start_pipoline
 def handle_start_pipline(chatID):
+    global logs_manager
     try:
         # Создадим тестового пользователя
         test_chatID = 'test_user_pipline'
@@ -180,14 +190,21 @@ def handle_start_pipline(chatID):
         else:
             bot.send_message(chatID, 'Колонка "Source" в файле отсутствует')
         
-        # Формирование лог-файла
-        current_time = datetime.datetime.now()
-        log_file_name = f'test_pipline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        log_file_path = os.path.join(logs_folder_path, log_file_name)
-
         # Создание лог-файла
-        test_data.to_csv(log_file_path, index=False, encoding='UTF-8')
+        log_file_name = logs_manager.create_log_pipline()
         bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
+
+        #Логируем действия
+        logs_manager.log_interaction(
+            request_time    =datetime.datetime.now(),
+            chat_id         =chatID,
+            user_name       =test_username,
+            request_text    ="text",
+            response_time   =datetime.datetime.now(),
+            response_text   =response_text,
+            used_files_path ="input_user_files",
+            rating          =None
+        )
 
     except FileNotFoundError as fnf_error:
         bot.send_message (chatID, str(fnf_error))
@@ -336,7 +353,6 @@ def handle_buttons(message):
                 response_text = 'Произошла ошибка при обработке запроса.'
                 bot.send_message(chatID, response_text)
                 print(f'Ошибка в get_answer: {e}')
-    
 
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
@@ -354,9 +370,11 @@ def handle_document(message):
     with open(save_path, 'wb') as new_file:
         new_file.write(dowloaded_file)
 
+    bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+
     io_file_operation.process_files(chatID, username)
 
-    bot.send_message(chatID, f"Файл '{file_name}' успешно загружен и обработан")
+    bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
 
 # ---= ОБРАБОТКА НЕПОДДЕРЖИВАЕМЫХ ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])

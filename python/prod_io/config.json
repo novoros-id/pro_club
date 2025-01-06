@@ -3,6 +3,6 @@
     "other_setting_1": "value_1",
     "other_setting_2": true,
     "other_setting_3": ["item1", "item2"],
-    "logs_folder_path": "E:\\temp\\folder_io_project",
+    "logs_folder_path": "E:\\temp\\folder_io_project\\Logs",
     "task_for_test": "E:\\temp\\folder_io_project\\task_for_test"
   }
