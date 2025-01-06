@@ -3,7 +3,7 @@ import telebot
 import io_file_operation
 import io_db
 import os
-import json
+import shutil
 import pandas
 import datetime
 import io_json
@@ -147,8 +147,21 @@ def read_test_excel_file (file_name):
 
 # Функция обработки команды $start_pipoline
 def handle_start_pipline(chatID):
-
     try:
+        # Создадим тестового пользователя
+        test_chatID = 'test_user_pipline'
+        test_username = 'test_user_pipline'
+
+        users = io_json.get_user_folder('main_folder_path')
+        # Проверяем есть ли тестовый пользователь
+        if isinstance(users, list) and test_username not in users: #Думается, что в дальнейшем надо проверку переделать на ChatID
+            # Создаем пользователя если его нет
+            io_file_operation.create_user(test_chatID, test_username)
+            bot.send_message(chatID, f'Создан пользователь: {test_username} дя запуска тестового конвейера')
+        
+        # Если пользователь есть продолжаем работу конейера от его имени
+        bot.send_message(chatID, f'Тест-конвейер запускается от пользователя: {test_username}')
+
         test_data =read_test_excel_file("prime.xlsx")
         response_text = f'Файл с тестами загружен! Количество тестов: {len(test_data)}'
         bot.send_message(chatID, response_text)
@@ -182,6 +195,49 @@ def handle_start_pipline(chatID):
     except Exception as e:
         bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
 
+# Формирование базы данных с файлами для тестового пользователя
+def simulate_upload_for_test_user():
+    zakroma_folder = io_file_operation.return_zakroma_folder()
+
+    # Проверяем определена ли глобальная переменная
+    global unique_source_files
+    if not unique_source_files:
+        print('Глобальная переменная unique_source_files не определена. Нет перечня файлов для формирования тестовых кейсов')
+    
+    # Папка для файлов тестового пользователя
+    test_chatID = 'test_user_pipline'
+    test_username = 'test_user_pipline'
+    user_input_folder = io_file_operation.return_user_folder_input(test_username)
+
+    # Создаем папку тестового пользователя, если её нет
+    if not os.path.exists(user_input_folder):
+        os.makedirs(user_input_folder)
+    
+    # Копируем файлы из zakroma_folder в папку тестового пользователя
+    for file_name in unique_source_files:
+        source_file_path = os.path.join(zakroma_folder, file_name)
+        destination_file_path = os.path.join(user_input_folder,file_name)
+        if os.path.exists(source_file_path):
+            try:
+                shutil.copy(source_file_path, destination_file_path)
+                print(f'Файл {file_name} успешно скопировать в папку тестового пользователя')
+            except Exception as e:
+                print (f'Ошибка при копировании файла {file_name}: {e}')
+        else:
+            print(f'Файл {file_name} отсутствует в папке {zakroma_folder}')
+    
+    # Имитируем загрузку файлов тестовым пользователем
+    for file_name in unique_source_files:
+        file_path = os.path.join(user_input_folder, file_name)
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as file:
+                file_data = file.read()
+                # Обрабатываем файл как будто он был загружен пользователем
+                io_file_operation.process_files(test_chatID, test_username)
+                print(f'Файл {file_name} обработан как загруженный')
+        else:
+            print(f'Файл {file_name} отсутствует в папке {user_input_folder}')
+
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
 def handle_buttons(message):
@@ -206,6 +262,7 @@ def handle_buttons(message):
 
     elif text.startswith ('$start_pipline'):
         handle_start_pipline(chatID)
+        simulate_upload_for_test_user()
 
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
