@@ -8,8 +8,8 @@ class gvid_default:
 
         import io_file_operation
         import os
-        from langchain.embeddings  import HuggingFaceEmbeddings
-        from langchain.vectorstores import Chroma
+        from langchain_community.embeddings  import HuggingFaceEmbeddings
+        from langchain_community.vectorstores import Chroma
 
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
         if not os.path.exists(user_folder_path):
