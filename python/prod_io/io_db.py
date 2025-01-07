@@ -12,23 +12,9 @@ import io_get_vectror_db
 import io_name_search
 import io_promt
 
-
-from langchain.document_loaders import PyPDFLoader
-from langchain_community.document_loaders import Docx2txtLoader
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter,
-)
-from langchain.embeddings  import HuggingFaceEmbeddings
-
-from langchain.vectorstores import Chroma
-#from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
-from chromadb.config import Settings
-
 from sentence_transformers import SentenceTransformer
 
 from langchain_ollama import OllamaLLM
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 #from langchain import PromptTemplate
 from langchain.schema import HumanMessage
 
