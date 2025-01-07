@@ -1,8 +1,9 @@
 import json
 import os
+import config
 
 def get_config_value(key):
-    filename = "/Users/alexeyvaganov/doc/GitHub/pro_club/python/prod_io/config.json"
+    filename = config.path_config_json
     with open(filename, 'r') as file:
         data = json.load(file)
         return data.get(key)

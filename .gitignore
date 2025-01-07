@@ -2,6 +2,7 @@
 /python/prod_io/config_vgn.py
 python/prod_io/io_main.py
 python/prod_io/config.json
+python/prod_io/__pycache__/
 python/prod_io/__pycache__/io_db.cpython-312.pyc
 python/prod_io/__pycache__/io_file_operation.cpython-312.pyc
 python/prod_io/__pycache__/io_json.cpython-312.pyc
