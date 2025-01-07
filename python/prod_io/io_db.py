@@ -174,22 +174,10 @@ class DbHelper:
 
     def get_vectror_db(self):
 
-        user_folder_path = io_file_operation.return_user_folder(self.user_name)
-        if not os.path.exists(user_folder_path):
-            return False
-        
-        db_folder = os.path.join(user_folder_path, 'db')
-
-        if not os.path.exists(db_folder):
-            return False
-        
-        #todo: need parametr for model_kwargs
-        hf_embeddings_model = HuggingFaceEmbeddings(
-            model_name="cointegrated/LaBSE-en-ru", model_kwargs={"device": "cpu"})
-
-        vectordb = Chroma(collection_name = "main", persist_directory=db_folder, embedding_function=hf_embeddings_model)
-
-        return vectordb
+        class_name_gvidb = io_json.get_config_value("class_name_get_vectror_db")
+        gvidb_class = getattr(io_get_vectror_db, class_name_gvidb)
+        gvid_object = gvidb_class(self.user_name)
+        return gvid_object.get_vectror_db() 
 
     def get_answer(self, prompt, llm_model: LLM_Models = None):
 
