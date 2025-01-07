@@ -4,6 +4,14 @@ from enum import Enum
 import json
 from dataclasses import dataclass, field
 import io_file_operation
+import io_json
+import io_separate_file
+import io_embeddings
+import io_put_vector_in_db
+import io_get_vectror_db
+import io_name_search
+import io_promt
+
 
 from langchain.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import Docx2txtLoader
@@ -25,7 +33,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.schema import HumanMessage
 
 class LLM_Models(Enum):
-    Olama3 = 'llama3'
+    Olama3 = io_json.get_config_value("model")
 
 @dataclass
 class Processed_Files:
@@ -145,23 +153,10 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        basename, extension = os.path.splitext(file_path)
-        
-        match extension:
-            case ".docx":
-                loader = Docx2txtLoader(file_path)
-            case ".pdf":  
-                loader = PyPDFLoader(file_path)
-            case _:
-                print(f"Данный файл не поддерживается {file_path}")
-                return []
-
-        documents = loader.load()
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
-        documents = text_splitter.split_documents(documents)
-
-        return documents
+        class_name_separate_file = io_json.get_config_value("class_name_separate_file")
+        separate_class = getattr(io_separate_file, class_name_separate_file)
+        separate_object = separate_class(file_path)
+        return separate_object.separate_file()
 
     def get_embeddings(self):
 
