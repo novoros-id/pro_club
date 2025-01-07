@@ -38,14 +38,19 @@ class LogManager:
         log_file_path = os.path.join(self.logs_folder_path, log_file_name)
         
         try:
-            pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating']).to_csv(
-                log_file_path, index=False, encoding='utf-8'
-            )
+            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+            self.logs_file_name = log_file_path
         except Exception as e:
             print(f'Ошибка при создании файла тестовых логов: {e}')
             raise
 
         return log_file_name
+    
+    #По завершении работы тестового конвейера вернём путь к основному лог файлу
+    def switch_to_main_logs(self):
+        main_log_lile_name = "bot_logs.csv"
+        self.logs_file_name = os.path.join(self.logs_folder_path, main_log_lile_name)
 
     def log_rating(self, chat_id, rating):
         # Убедимся, что колонка rating имеет тип object
@@ -154,6 +159,29 @@ def read_test_excel_file (file_name):
     
     return data_frame
 
+#Универсальная обработка колонок
+def process_column(data_frame, column_name, description, chatID):
+    """
+    Обрабатывает указанную колонку в DataFrame и возвращает значения в виде списка строк
+    
+    :param data_frame: pandas.DataFrame, в котором нужно обработать колонку
+    :param column_name: str, имя колонки для обработки
+    :param chatID: int, идентификатор чата для отправки сообщения
+    :return: bool, успешность обработки
+    """
+    if column_name in data_frame.columns:
+        values = data_frame[column_name].dropna().unique().tolist()
+        values = [str(value).strip() for value in values] #Преобразование в строку
+
+        result_text = '\n'.join(values)
+        response_text = f'{description}:\n{result_text}'
+
+        bot.send_message(chatID, response_text)
+        return values
+    else:
+        bot.send_message(chatID, f'Колонка "{column_name}" в файле отсутствует')
+        return None
+
 # Функция обработки команды $start_pipoline
 def handle_start_pipline(chatID):
     global logs_manager
@@ -171,43 +199,77 @@ def handle_start_pipline(chatID):
         
         # Если пользователь есть продолжаем работу конейера от его имени
         bot.send_message(chatID, f'Тест-конвейер запускается от пользователя: {test_username}')
-
-        test_data =read_test_excel_file("prime.xlsx")
-        response_text = f'Файл с тестами загружен! Количество тестов: {len(test_data)}'
-        bot.send_message(chatID, response_text)
-
-        #Извлечение уникальных значений из колонки 'Source'
-        if 'Source' in test_data.columns:
-            unique_sources = test_data['Source'].dropna().unique().tolist()
-            sources_text = '\n'.join(unique_sources)
-            response_text = (f'Следующие файлы из колонки "Source" будут использоваться в тестах:\n{sources_text}')
-
-            #Сохраняем уникальные значения в глобальную переменную
+        
+        #Загружаем данные из Excel
+        test_data = read_test_excel_file("prime.xlsx")
+        
+        # Обработка колонки 'Source'
+        #TODO Сделать единообразно
+        unique_sources  = process_column(
+            data_frame  = test_data,
+            column_name = 'Source',
+            description = f'Следующие файлы из колонки "Source" будут использоваться в тестах',
+            chatID      = chatID
+        )
+        if unique_sources:
             global unique_source_files
             unique_source_files = unique_sources
-            bot.send_message(chatID, response_text)
-            
-        else:
-            bot.send_message(chatID, 'Колонка "Source" в файле отсутствует')
+
+        # Обработка колонки 'Question'  
+        # TODO Сделать единообразно  
+        test_questions  = process_column(
+            data_frame  = test_data,
+            column_name = 'Question',
+            description = f'Следующие вопросы из колонки "Question" будут использоваться в тестах',
+            chatID      = chatID
+        )
+
+        if not test_questions or not isinstance(test_questions, list):
+            bot.send_message(chatID, f'[DEBAG] test_questions; {test_questions} (тип: {type(test_questions)})')
+            bot.send_message(chatID, 'Вопросы из колонки "Question" отсутствуют или не найдены')
+            return
         
+# Если вопросы найдены, обработаем их
+        total_questions = len(test_questions)
+
         # Создание лог-файла
         log_file_name = logs_manager.create_log_pipline()
         bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
 
-        #Логируем действия
-        logs_manager.log_interaction(
-            request_time    =datetime.datetime.now(),
-            chat_id         =chatID,
-            user_name       =test_username,
-            request_text    ="text",
-            response_time   =datetime.datetime.now(),
-            response_text   =response_text,
-            used_files_path ="input_user_files",
-            rating          =None
-        )
+        # Подготовка объекта db_helper для тестового пользователя
+        db_helper = io_db.DbHelper(chat_id=test_chatID, user_name=test_username)
+
+        # Поочередная обработка вопросов
+        for idx, question in enumerate(test_questions, start=1):
+            # Отправляем вопрос и получаем ответ
+            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}.")
+            print(f'[DEBUG] Отправляем вопрос: {question}')
+            response = db_helper.get_answer(prompt=question)
+            print(f'[DEBUG] Ответ содержит: {response}')
+
+            # Запись в лог
+            logs_manager.log_interaction(
+                request_time=datetime.datetime.now(),
+                chat_id=test_chatID,  # Лог пишется от имени test_user_pipline
+                user_name=test_username,
+                request_text=question,
+                response_time=datetime.datetime.now(),
+                response_text=response,
+                used_files_path="/path/to/files",
+                rating=None
+            )
+
+            # Обновляем прогресс
+            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов.")
+
+        # Сообщаем о завершении
+        bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
+
+        # Переключаемся на основной лог-файл
+        logs_manager.switch_to_main_logs()
 
     except FileNotFoundError as fnf_error:
-        bot.send_message (chatID, str(fnf_error))
+        bot.send_message(chatID, str(fnf_error))
 
     except Exception as e:
         bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
