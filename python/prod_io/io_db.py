@@ -160,33 +160,17 @@ class DbHelper:
 
     def get_embeddings(self):
 
-        model_name = "cointegrated/LaBSE-en-ru"
-
-        hf_embeddings_model = HuggingFaceEmbeddings(
-            #todo: need parametr for model_kwargs
-        model_name=model_name, model_kwargs={"device": "cpu"})
-
-        return hf_embeddings_model
+        class_name_embedings = io_json.get_config_value("class_name_embeddings")
+        embedings_class = getattr(io_embeddings, class_name_embedings)
+        embedings_object = embedings_class()
+        return embedings_object.get_embeddings()
 
     def put_vector_in_db(self, separate_text, embedding):
 
-        user_folder_path = io_file_operation.return_user_folder(self.user_name)
-        if not os.path.exists(user_folder_path):
-            return False
-        
-        db_folder = os.path.join(user_folder_path, 'db')
-
-        if not os.path.exists(db_folder):
-            return False
-
-        vector_db = Chroma.from_documents(
-            collection_name = "main",
-            documents=separate_text,
-            embedding=embedding,
-            persist_directory=db_folder,
-            )
-        
-        return True
+        class_name_pvidb = io_json.get_config_value("class_name_put_vector_in_db")
+        pvidb_class = getattr(io_put_vector_in_db, class_name_pvidb)
+        pvid_object = pvidb_class(separate_text, embedding, self.user_name)
+        return pvid_object.put_vector_in_db()
 
     def get_vectror_db(self):
 
