@@ -146,7 +146,7 @@ class DbHelper:
     def separate_file(self, file_path):
 
         basename, extension = os.path.splitext(file_path)
-
+        
         match extension:
             case ".docx":
                 loader = Docx2txtLoader(file_path)
