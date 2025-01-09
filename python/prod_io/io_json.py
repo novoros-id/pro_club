@@ -42,5 +42,5 @@ def create_file_user_config (user_name):
             json.dump(data, f, indent=4)
             
         print(f'Файл {config_path} успешно создан.')
-    else:
-        print(f'Файл {config_path} уже существует.')
+    #else:
+    #    print(f'Файл {config_path} уже существует.')

@@ -9,13 +9,12 @@ import io_separate_file
 import io_embeddings
 import io_put_vector_in_db
 import io_get_vectror_db
-import io_name_search
+import io_search_from_db
 import io_promt
 
 from sentence_transformers import SentenceTransformer
 
 from langchain_ollama import OllamaLLM
-#from langchain import PromptTemplate
 from langchain.schema import HumanMessage
 
 class LLM_Models(Enum):
@@ -178,12 +177,24 @@ class DbHelper:
             return 'Бот не поддерживает модель ({})'.format(llm_model.name)
 
         #print(dir(vectordb))
-        data = vectordb.similarity_search(prompt,k=4)
+
+        class_name_search = io_json.get_config_value("class_name_search")
+        search_class = getattr(io_search_from_db, class_name_search)
+        search_object = search_class(prompt, self.user_name, vectordb)
+        data =  search_object.seach_from_db()
+
+        #data = vectordb.similarity_search(prompt,k=4)
         #embedding_vector  = OllamaLLM().embed_query(prompt) 
         #data = vectordb.similarity_search_by_vector(embedding_vector)
         #Вы полезный ассистент. Вы отвечаете на вопросы о документации, хранящейся в
         #question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
-        question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+        #question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+
+        class_name_promt = io_json.get_config_value("class_name_promt")
+        promt_class = getattr(io_promt, class_name_promt)
+        promt_object = promt_class(data, prompt)
+        question  =  promt_object.get_promt()
+
         text = llm.invoke([HumanMessage(content=question)])
 
         return text

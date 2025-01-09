@@ -5,7 +5,7 @@ class e_default:
     def __init__(self):
         print("embeding")
     def get_embeddings(self):
-        from langchain_community.embeddings  import HuggingFaceEmbeddings
+        from langchain_huggingface import HuggingFaceEmbeddings
 
         model_name = "cointegrated/LaBSE-en-ru"
 
