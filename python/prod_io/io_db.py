@@ -4,28 +4,21 @@ from enum import Enum
 import json
 from dataclasses import dataclass, field
 import io_file_operation
-
-from langchain.document_loaders import PyPDFLoader
-from langchain_community.document_loaders import Docx2txtLoader
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter,
-)
-from langchain.embeddings  import HuggingFaceEmbeddings
-
-from langchain.vectorstores import Chroma
-#from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
-from chromadb.config import Settings
+import io_json
+import io_separate_file
+import io_embeddings
+import io_put_vector_in_db
+import io_get_vectror_db
+import io_search_from_db
+import io_promt
 
 from sentence_transformers import SentenceTransformer
 
 from langchain_ollama import OllamaLLM
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-#from langchain import PromptTemplate
 from langchain.schema import HumanMessage
 
 class LLM_Models(Enum):
-    Olama3 = 'llama3'
+    Olama3 = io_json.get_config_value("model")
 
 @dataclass
 class Processed_Files:
@@ -145,72 +138,31 @@ class DbHelper:
 
     def separate_file(self, file_path):
 
-        basename, extension = os.path.splitext(file_path)
-
-        match extension:
-            case ".docx":
-                loader = Docx2txtLoader(file_path)
-            case ".pdf":  
-                loader = PyPDFLoader(file_path)
-            case _:
-                print(f"Данный файл не поддерживается {file_path}")
-                return []
-
-        documents = loader.load()
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
-        documents = text_splitter.split_documents(documents)
-
-        return documents
+        class_name_separate_file = io_json.get_config_value("class_name_separate_file")
+        separate_class = getattr(io_separate_file, class_name_separate_file)
+        separate_object = separate_class(file_path)
+        return separate_object.separate_file()
 
     def get_embeddings(self):
 
-        model_name = "cointegrated/LaBSE-en-ru"
-
-        hf_embeddings_model = HuggingFaceEmbeddings(
-            #todo: need parametr for model_kwargs
-        model_name=model_name, model_kwargs={"device": "cpu"})
-
-        return hf_embeddings_model
+        class_name_embedings = io_json.get_config_value("class_name_embeddings")
+        embedings_class = getattr(io_embeddings, class_name_embedings)
+        embedings_object = embedings_class()
+        return embedings_object.get_embeddings()
 
     def put_vector_in_db(self, separate_text, embedding):
 
-        user_folder_path = io_file_operation.return_user_folder(self.user_name)
-        if not os.path.exists(user_folder_path):
-            return False
-        
-        db_folder = os.path.join(user_folder_path, 'db')
-
-        if not os.path.exists(db_folder):
-            return False
-
-        vector_db = Chroma.from_documents(
-            collection_name = "main",
-            documents=separate_text,
-            embedding=embedding,
-            persist_directory=db_folder,
-            )
-        
-        return True
+        class_name_pvidb = io_json.get_config_value("class_name_put_vector_in_db")
+        pvidb_class = getattr(io_put_vector_in_db, class_name_pvidb)
+        pvid_object = pvidb_class(separate_text, embedding, self.user_name)
+        return pvid_object.put_vector_in_db()
 
     def get_vectror_db(self):
 
-        user_folder_path = io_file_operation.return_user_folder(self.user_name)
-        if not os.path.exists(user_folder_path):
-            return False
-        
-        db_folder = os.path.join(user_folder_path, 'db')
-
-        if not os.path.exists(db_folder):
-            return False
-        
-        #todo: need parametr for model_kwargs
-        hf_embeddings_model = HuggingFaceEmbeddings(
-            model_name="cointegrated/LaBSE-en-ru", model_kwargs={"device": "cpu"})
-
-        vectordb = Chroma(collection_name = "main", persist_directory=db_folder, embedding_function=hf_embeddings_model)
-
-        return vectordb
+        class_name_gvidb = io_json.get_config_value("class_name_get_vectror_db")
+        gvidb_class = getattr(io_get_vectror_db, class_name_gvidb)
+        gvid_object = gvidb_class(self.user_name)
+        return gvid_object.get_vectror_db() 
 
     def get_answer(self, prompt, llm_model: LLM_Models = None):
 
@@ -225,12 +177,24 @@ class DbHelper:
             return 'Бот не поддерживает модель ({})'.format(llm_model.name)
 
         #print(dir(vectordb))
-        data = vectordb.similarity_search(prompt,k=4)
+
+        class_name_search = io_json.get_config_value("class_name_search")
+        search_class = getattr(io_search_from_db, class_name_search)
+        search_object = search_class(prompt, self.user_name, vectordb)
+        data =  search_object.seach_from_db()
+
+        #data = vectordb.similarity_search(prompt,k=4)
         #embedding_vector  = OllamaLLM().embed_query(prompt) 
         #data = vectordb.similarity_search_by_vector(embedding_vector)
         #Вы полезный ассистент. Вы отвечаете на вопросы о документации, хранящейся в
         #question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
-        question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+        #question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
+
+        class_name_promt = io_json.get_config_value("class_name_promt")
+        promt_class = getattr(io_promt, class_name_promt)
+        promt_object = promt_class(data, prompt)
+        question  =  promt_object.get_promt()
+
         text = llm.invoke([HumanMessage(content=question)])
 
         return text

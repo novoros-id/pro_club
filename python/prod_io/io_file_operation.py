@@ -9,7 +9,7 @@ import shutil
 def create_user(chat_id, user_name):
     create_folder_structure(user_name)
     io_json.create_file_user_config(user_name)
-    print("Папки созданы")
+    #print("Папки созданы")
 
 def process_files(chat_id, user_name):
     copy_user_files_from_input(chat_id, user_name)
@@ -40,7 +40,6 @@ def copy_user_files_from_input(chat_id, user_name):
 def get_list_files(chat_id, user_name):
     input_user_files = return_user_folder_input(user_name)
     files = os.listdir(input_user_files)
-    print()
     result = '\n'.join(files)
     if result == "":
         io_send_telegram.send_telegram_message(chat_id, "Файлы отсутствуют")
@@ -52,10 +51,10 @@ def file_is_pdf(file_path):
     extension = os.path.splitext(file_path)[1]
 
     if extension.lower() == '.pdf':
-        print('Файл имеет расширение PDF.')
+        #print('Файл имеет расширение PDF.')
         return True
     else:
-        print('Файл не имеет расширения PDF.')
+        #print('Файл не имеет расширения PDF.')
         return False
 
 def file_is_word(file_path):
@@ -63,10 +62,10 @@ def file_is_word(file_path):
     extension = os.path.splitext(file_path)[1]
 
     if extension.lower() == '.docx':
-        print('Файл имеет расширение Doc.')
+        #print('Файл имеет расширение Doc.')
         return True
     else:
-        print('Файл не имеет расширения Doc.')
+        #print('Файл не имеет расширения Doc.')
         return False
     
 def  return_zakroma_folder():  
@@ -139,7 +138,7 @@ def create_folder_structure(user_name):
 
     # Путь к папке пользователя
     user_folder_path = return_user_folder(user_name)
-    print(user_folder_path)
+    #print(user_folder_path)
     
     # Создаем основную папку
     if not os.path.exists(user_folder_path):
