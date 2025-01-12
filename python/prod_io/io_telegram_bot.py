@@ -228,6 +228,7 @@ def process_column(data_frame, column_name, description, chatID, send_message=Fa
         return None
 
 # Функция ожидания обработки файла
+# TODO Нужно подумать как правильно реализовать и нужна ли вообще эта функция
 def wait_for_file_processing(chatID, test_username, file_name, timeout=300):
 
     start_time = time.time()
