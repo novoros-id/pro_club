@@ -7,9 +7,14 @@ import io_send_telegram
 import shutil
 
 def create_user(chat_id, user_name):
-    create_folder_structure(user_name)
-    io_json.create_file_user_config(user_name)
-    print("Папки созданы")
+    try:
+        create_folder_structure(user_name)
+        io_json.create_file_user_config(user_name)
+        print("Папки пользователя созданы")
+        return True
+    except Exception as e:
+        print(f'Ошибка при создании пользователя: {e}')
+        return False
 
 def process_files(chat_id, user_name):
     copy_user_files_from_input(chat_id, user_name)
@@ -46,6 +51,16 @@ def get_list_files(chat_id, user_name):
         io_send_telegram.send_telegram_message(chat_id, "Файлы отсутствуют")
     else:
         io_send_telegram.send_telegram_message(chat_id, result)
+
+# Сделал дубль функции для тест-конвейера (без возврата пользователю списка файлов)
+def get_list_files_for_pipline(chat_id, user_name):
+    input_user_files = return_user_folder_input(user_name)
+    files = os.listdir(input_user_files)
+    result = '\n'.join(files)
+    if result == "":
+        io_send_telegram.send_telegram_message(chat_id, "Файлы отсутствуют")
+    else:
+        return files
 
 def file_is_pdf(file_path):
     # Получаем расширение файла

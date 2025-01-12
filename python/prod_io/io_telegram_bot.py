@@ -6,6 +6,7 @@ import os
 import shutil
 import pandas
 import datetime
+import time
 import io_json
 import re
 
@@ -49,8 +50,8 @@ class LogManager:
     
     #По завершении работы тестового конвейера вернём путь к основному лог файлу
     def switch_to_main_logs(self):
-        main_log_lile_name = "bot_logs.csv"
-        self.logs_file_name = os.path.join(self.logs_folder_path, main_log_lile_name)
+        main_log_file_name = "bot_logs.csv"
+        self.logs_file_name = os.path.join(self.logs_folder_path, main_log_file_name)
 
     def log_rating(self, chat_id, rating):
         # Убедимся, что колонка rating имеет тип object
@@ -93,6 +94,32 @@ class LogManager:
         except Exception as e:
             print(f'Ошибка при создании логов: {e}')
 
+# ---= КЛАСС ОБРАБОТКИ ДАННЫХ ДЛЯ ТЕСТ-КОНВЕЙЕРА =---
+class TestPipeline:
+    def __init__(self):
+        self.unique_source_files = []
+    
+    def initialize_files(self, source_data):
+        
+        #Инициализация файла источника данных
+        self.unique_source_files = source_data
+        print(f'Инициализирован файл: {self.unique_source_files}')
+    
+    def validate_files(self, uploaded_files):
+
+        #Проверка что все необходимые файлы для запуска тестового конвейера загружены
+        missing_files = set(self.unique_source_files) - set(uploaded_files)
+        if missing_files:
+            print(f'Отсутствуют файлы: {missing_files}')
+        else:
+            print('Все необходимые файлы найдены')
+
+    def process_files(self):
+
+        #Обработка файлов из списка unique_source_files
+        for file_name in self.unique_source_files:
+            print(f'Обрабатывается файл: {file_name}')
+
 # ---= ИНИЦИАЛИЗАЦИЯ БОТА =---
 logs_folder_path = io_json.get_config_value('logs_folder_path')
 logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
@@ -107,7 +134,7 @@ DELETE_FILES_BUTTON = 'Удалить все загруженные файлы'
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = str(message.chat.id)
-    username = message.from_user.username
+    username = message.from_user.username or 'Unknown_user'
     first_name = message.from_user.first_name
     io_file_operation.create_user(chat_id, username)
 
@@ -121,7 +148,7 @@ def send_welcome(message):
     bot.send_message(message.chat.id,
         f"""Привет, {first_name}! Я бот помощник. Я помогу тебе найти нужный ответ
         Отправь мне файлы в формате PDF или DOCX и задавай по ним вопросы
-        Если хочешь пообщаться не по текстам, то отправь мне сообщение которое начинается с точки [.]
+        Если хочешь пообщаться не по текстам, то отправь мне сообщение которое начинается с [$]
         Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг \n\n"""
         , reply_markup=keyboard
     )
@@ -138,6 +165,27 @@ def help_bot(message):
     )
 
 #  --= ТЕСТОВЫЙ КОНВЕйЕР =---
+#Создание тестового пользователя
+def create_test_user_for_pipline(chatID):
+
+# Создадим тестового пользователя
+    # test_chatID = chatID
+    test_username = 'test_user_pipline'
+
+    users = io_json.get_user_folder('main_folder_path')
+
+    # Проверяем есть ли тестовый пользователь
+    if isinstance(users, list) and test_username not in users: #Думается, что в дальнейшем надо проверку переделать на ChatID
+
+        # Создаем пользователя если его нет
+        if io_file_operation.create_user(chatID, test_username):
+            bot.send_message(chatID, f'Создан пользователь: {test_username} для запуска тестового конвейера')
+        else:
+            bot.send_message(chatID, f'Ошибка создания пользователя: {test_username}')
+        
+    # Если пользователь есть продолжаем работу конейера от его имени
+    bot.send_message(chatID, f'Тест-конвейер запускается от пользователя: {test_username}')
+
 # Функция чтения файла для тестов
 def read_test_excel_file (file_name):
     if not os.path.exists(task_for_test_folder):
@@ -153,70 +201,160 @@ def read_test_excel_file (file_name):
     except Exception as e:
         raise ValueError(f'Ошибка при чтении Excel-файла: {e}')
     
-    required_columns = {'Question', 'Answer','Source'}
+    if data_frame is None or data_frame.empty:
+        raise ValueError('Excel-файл пуст или не содержит данных')
+    
+    required_columns = {'Question', 'Answer', 'Source'}
     if not required_columns.issubset(data_frame.columns):
         raise ValueError(f'Отсутствуют необходимые колонки в файле: {required_columns - set(data_frame)}')
     
     return data_frame
 
-#Универсальная обработка колонок
-def process_column(data_frame, column_name, description, chatID):
-    """
-    Обрабатывает указанную колонку в DataFrame и возвращает значения в виде списка строк
-    
-    :param data_frame: pandas.DataFrame, в котором нужно обработать колонку
-    :param column_name: str, имя колонки для обработки
-    :param chatID: int, идентификатор чата для отправки сообщения
-    :return: bool, успешность обработки
-    """
+# Универсальная обработка колонок
+def process_column(data_frame, column_name, description, chatID, send_message=False):
+
     if column_name in data_frame.columns:
         values = data_frame[column_name].dropna().unique().tolist()
         values = [str(value).strip() for value in values] #Преобразование в строку
 
-        result_text = '\n'.join(values)
-        response_text = f'{description}:\n{result_text}'
+        if send_message:
+            result_text = '\n'.join(values)
+            response_text = f'{description}:\n{result_text}'
+            bot.send_message(chatID, response_text)
 
-        bot.send_message(chatID, response_text)
         return values
     else:
         bot.send_message(chatID, f'Колонка "{column_name}" в файле отсутствует')
         return None
 
-# Функция обработки команды $start_pipoline
+# Функция ожидания обработки файла
+def wait_for_file_processing(chatID, test_username, file_name, timeout=300):
+
+    start_time = time.time()
+    # test_chatID = chatID
+    test_username = 'test_user_pipline'
+
+    # Цикл ожидания обработки файла
+    while time.time() - start_time < timeout:
+
+        # Получаем список файлов тестового пользователя
+        uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
+
+        if uploaded_files is None:
+            return False
+        
+        if set(file_name).issubset(set(uploaded_files)):
+            return True # Обрабатываемый файл загружен
+        
+        bot.send_message(chatID, f"Ожидание обработки файла {file_name}...")
+        time.sleep(30)  # Ждём 30 секунд перед повторной проверкой
+    
+    # Таймаут истек
+    return False
+
+# Функция получения списка файлов для тест-конвейера
+def initialize_pipline_source(chatID, excel_lile="prime.xlsx", send_message=False):
+    
+    #Загружаем данные из Excel
+    try:
+        test_data = read_test_excel_file(excel_lile)
+    except FileNotFoundError:
+        bot.send_message(chatID, 'Файл prime.xlsx не найден. Проверьте наличие файла')
+        return False
+        
+    # Обработка колонки 'Source'
+    unique_sources  = process_column(
+        data_frame  = test_data,
+        column_name = 'Source',
+        description = 'Следующие файлы из колонки "Source" будут использоваться в тестах',
+        chatID      = chatID,
+        send_message= send_message
+    )
+
+    unique_sources = [source.strip() for source in unique_sources if isinstance(source, str) and source.strip()]
+    if not unique_sources:
+        bot.send_message(chatID, 'Не корректные данные в колонке "Source"')
+        return False
+
+    # Возвращаем список уникальных файлов
+    return unique_sources
+
+# Формирование базы данных с файлами для тестового пользователя
+def simulate_upload_for_test_user(chatID):
+    zakroma_folder = io_file_operation.return_zakroma_folder()
+
+    # Инициализация pipline через общую функцию
+    unique_sources = initialize_pipline_source(chatID, send_message=True)
+    if unique_sources is None:
+        return False
+
+    pipeline = TestPipeline()
+    pipeline.initialize_files(unique_sources)
+
+    # Папка для файлов тестового пользователя
+    # test_chatID = 'test_user_pipline'
+    test_username = 'test_user_pipline'
+    user_input_folder = io_file_operation.return_user_folder_input(test_username)
+
+    # Создаем папку тестового пользователя, если её нет
+    if not os.path.exists(user_input_folder):
+        os.makedirs(user_input_folder)
+    
+    # Копируем файлы из zakroma_folder в папку тестового пользователя
+    for file_name in pipeline.unique_source_files:
+        source_file_path = os.path.join(zakroma_folder, file_name)
+        destination_file_path = os.path.join(user_input_folder,file_name)
+
+        if os.path.exists(source_file_path):
+
+            try:
+                if not os.path.exists(destination_file_path):
+                    shutil.copy(source_file_path, destination_file_path)
+                    print(f'Файл {file_name} успешно скопировать в папку тестового пользователя')
+
+            except Exception as e:
+                print (f'Ошибка при копировании файла {file_name}: {e}')
+
+        else:
+            print(f'Файл {file_name} отсутствует в папке {zakroma_folder}')
+            return False # Если хотя бы одного файла нет, возвращаем False
+    
+    # Имитируем загрузку файлов тестовым пользователем
+    for file_name in pipeline.unique_source_files:
+        file_path = os.path.join(user_input_folder, file_name)
+
+        if os.path.exists(file_path):
+
+            # Обрабатываем файл как будто он был загружен пользователем
+            bot.send_message(chatID, f'Запустили загрузку файлов. Нужно подождать...')
+            io_file_operation.process_files(chatID, test_username)
+
+            #Ожидаем завершения обработки файла
+            #TODO пока закомментировал. С этой функцией очень долго работает. Пока не понимаю почему
+            # if not wait_for_file_processing(chatID, test_username, file_name):
+            #     raise ValueError(f'файл {file_name} не обработан за отведенное время.')   
+
+        else:
+            print(f'Файл {file_name} отсутствует в папке {user_input_folder}')
+            return False
+    
+    bot.send_message(chatID, 'Все файлы успешно обработаны')
+    return True
+
+# Функция обработки команды $start_pipline
 def handle_start_pipline(chatID):
     global logs_manager
+
+    test_username = 'test_user_pipline'
+
     try:
-        # Создадим тестового пользователя
-        test_chatID = 'test_user_pipline'
-        test_username = 'test_user_pipline'
-
-        users = io_json.get_user_folder('main_folder_path')
-        # Проверяем есть ли тестовый пользователь
-        if isinstance(users, list) and test_username not in users: #Думается, что в дальнейшем надо проверку переделать на ChatID
-            # Создаем пользователя если его нет
-            io_file_operation.create_user(test_chatID, test_username)
-            bot.send_message(chatID, f'Создан пользователь: {test_username} дя запуска тестового конвейера')
-        
-        # Если пользователь есть продолжаем работу конейера от его имени
-        bot.send_message(chatID, f'Тест-конвейер запускается от пользователя: {test_username}')
-        
         #Загружаем данные из Excel
-        test_data = read_test_excel_file("prime.xlsx")
-        
-        # Обработка колонки 'Source'
-        #TODO Сделать единообразно
-        unique_sources  = process_column(
-            data_frame  = test_data,
-            column_name = 'Source',
-            description = f'Следующие файлы из колонки "Source" будут использоваться в тестах',
-            chatID      = chatID
-        )
-        if unique_sources:
-            global unique_source_files
-            unique_source_files = unique_sources
+        try:
+            test_data = read_test_excel_file("prime.xlsx")
+        except FileNotFoundError:
+            bot.send_message(chatID, 'Файл prime.xlsx не найден. Проверьте наличие файла')
 
-        # Обработка колонки 'Question'  
-        # TODO Сделать единообразно  
+        # Обработка колонки 'Question'   
         test_questions  = process_column(
             data_frame  = test_data,
             column_name = 'Question',
@@ -225,7 +363,6 @@ def handle_start_pipline(chatID):
         )
 
         if not test_questions or not isinstance(test_questions, list):
-            bot.send_message(chatID, f'[DEBAG] test_questions; {test_questions} (тип: {type(test_questions)})')
             bot.send_message(chatID, 'Вопросы из колонки "Question" отсутствуют или не найдены')
             return
         
@@ -237,10 +374,11 @@ def handle_start_pipline(chatID):
         bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
 
         # Подготовка объекта db_helper для тестового пользователя
-        db_helper = io_db.DbHelper(chat_id=test_chatID, user_name=test_username)
+        db_helper = io_db.DbHelper(chatID, user_name=test_username)
 
         # Поочередная обработка вопросов
         for idx, question in enumerate(test_questions, start=1):
+
             # Отправляем вопрос и получаем ответ
             bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}.")
             print(f'[DEBUG] Отправляем вопрос: {question}')
@@ -249,14 +387,14 @@ def handle_start_pipline(chatID):
 
             # Запись в лог
             logs_manager.log_interaction(
-                request_time=datetime.datetime.now(),
-                chat_id=test_chatID,  # Лог пишется от имени test_user_pipline
-                user_name=test_username,
-                request_text=question,
-                response_time=datetime.datetime.now(),
-                response_text=response,
-                used_files_path="/path/to/files",
-                rating=None
+                request_time    = datetime.datetime.now(),
+                chat_id         = chatID,  
+                user_name       = test_username, # Лог пишется от имени test_user_pipline
+                request_text    = question,
+                response_time   = datetime.datetime.now(),
+                response_text   = response,
+                used_files_path = "/path/to/files",
+                rating          = None
             )
 
             # Обновляем прогресс
@@ -273,49 +411,6 @@ def handle_start_pipline(chatID):
 
     except Exception as e:
         bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
-
-# Формирование базы данных с файлами для тестового пользователя
-def simulate_upload_for_test_user():
-    zakroma_folder = io_file_operation.return_zakroma_folder()
-
-    # Проверяем определена ли глобальная переменная
-    global unique_source_files
-    if not unique_source_files:
-        print('Глобальная переменная unique_source_files не определена. Нет перечня файлов для формирования тестовых кейсов')
-    
-    # Папка для файлов тестового пользователя
-    test_chatID = 'test_user_pipline'
-    test_username = 'test_user_pipline'
-    user_input_folder = io_file_operation.return_user_folder_input(test_username)
-
-    # Создаем папку тестового пользователя, если её нет
-    if not os.path.exists(user_input_folder):
-        os.makedirs(user_input_folder)
-    
-    # Копируем файлы из zakroma_folder в папку тестового пользователя
-    for file_name in unique_source_files:
-        source_file_path = os.path.join(zakroma_folder, file_name)
-        destination_file_path = os.path.join(user_input_folder,file_name)
-        if os.path.exists(source_file_path):
-            try:
-                shutil.copy(source_file_path, destination_file_path)
-                print(f'Файл {file_name} успешно скопировать в папку тестового пользователя')
-            except Exception as e:
-                print (f'Ошибка при копировании файла {file_name}: {e}')
-        else:
-            print(f'Файл {file_name} отсутствует в папке {zakroma_folder}')
-    
-    # Имитируем загрузку файлов тестовым пользователем
-    for file_name in unique_source_files:
-        file_path = os.path.join(user_input_folder, file_name)
-        if os.path.exists(file_path):
-            with open(file_path, 'rb') as file:
-                file_data = file.read()
-                # Обрабатываем файл как будто он был загружен пользователем
-                io_file_operation.process_files(test_chatID, test_username)
-                print(f'Файл {file_name} обработан как загруженный')
-        else:
-            print(f'Файл {file_name} отсутствует в папке {user_input_folder}')
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
@@ -340,8 +435,63 @@ def handle_buttons(message):
         bot.send_message (chatID, response_text)
 
     elif text.startswith ('$start_pipline'):
+        # 1. Инициализируем тестового пользователя
+        create_test_user_for_pipline(chatID)
+       
+        # 2. Проверяем наличие нужных для тест-конвейера файлов, загруженных в базу у тестового пользователя
+        # Если нужных файлов нет, тогда все имеющиеся файлы будут удалены, а нужные будут загружены из zakroma_folder
+        # test_chatID = chatID
+        test_username = 'test_user_pipline'
+        pipeline = TestPipeline()
+
+        # Получаем список файлов тестового пользователя
+        uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
+        unique_sources = initialize_pipline_source(chatID)
+        if unique_sources is None:
+            return
+        
+        pipeline.initialize_files(unique_sources)
+
+        # Если есть необходимые файлы запускаем конвейер
+        if uploaded_files is None:
+            # Если список файлов пуст
+            bot.send_message(chatID, 'Файлы для запуска не найдены. Пытаемся загрузить необходимые файлы...')
+            try:
+                if not simulate_upload_for_test_user(chatID):
+                    bot.send_message(chatID, f'Ошибка: не удалость загрузить необходимые файлы для конвейера. Конвейер прерван')
+                    return
+
+            except Exception as e:
+                bot.send_message(chatID, f'Ошибка при загрузке файлов: {e}')
+                return
+
+        elif set(pipeline.unique_source_files).issubset(set(uploaded_files)):
+            # Если файлы найдены
+            bot.send_message(chatID, 'Файлы успешно найдены. Запусткаем тест-конвейер.')
+            # Переходим к "3. Запуск тест-конвейера"
+
+        else:
+            # Если файлы отсутствуют 
+            bot.send_message(chatID, "Файлы для запуска не найдены. Перезагружаем базу пользователя")
+            io_file_operation.delete_all_files(chatID, test_username)
+            bot.send_message(chatID, "Пытаемся загрузить необходимые файлы...")
+            try:
+                simulate_upload_for_test_user(chatID)
+            except Exception as e:
+                bot.send_message(chatID, f'Ошибка при загрузке файлов: {e}')
+                return
+
+            #После успешной загрузки выполняем повторную проверку наличия необходимых файлов
+            uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
+            if set(pipeline.unique_source_files).issubset(set(uploaded_files)):
+                bot.send_message(chatID, 'Файлы успешно найдены. Запусткаем тест-конвейер.')
+                # Переходим к "3. Запуск тест-конвейера"
+                
+            else:
+                bot.send_message(chatID, f'Не удалость найти для запуска тест-конвейера следующие файлы: {pipeline.unique_source_files}\nПопытки запуска тест-конвейера остановлены')
+        
+        # 3. Запуск тест-конвейера
         handle_start_pipline(chatID)
-        simulate_upload_for_test_user()
 
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
