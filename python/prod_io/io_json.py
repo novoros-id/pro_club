@@ -1,8 +1,11 @@
 import json
 import os
+import config
 
 def get_config_value(key):
-    filename = "E:\\Клуб разработчиков\\VS\\pro_club\\python\\prod_io\\config.json"
+
+    filename = config.path_config_json
+
     with open(filename, 'r') as file:
         data = json.load(file)
         return data.get(key)
@@ -41,5 +44,5 @@ def create_file_user_config (user_name):
             json.dump(data, f, indent=4)
             
         print(f'Файл {config_path} успешно создан.')
-    else:
-        print(f'Файл {config_path} уже существует.')
+    #else:
+    #    print(f'Файл {config_path} уже существует.')
