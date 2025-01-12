@@ -3,7 +3,9 @@ import os
 import config
 
 def get_config_value(key):
+
     filename = config.path_config_json
+
     with open(filename, 'r') as file:
         data = json.load(file)
         return data.get(key)
