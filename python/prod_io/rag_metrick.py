@@ -9,12 +9,11 @@ llm = OllamaLLM(
     model="llama3", temperature = "0.1"
 )
 
-class promt_default:
+class rag_metrick:
     def __init__(self, logs_folder_path, logs_path_file_name, prime_path_file_name):
         self.logs_folder_path = logs_folder_path
         self.logs_path_file_name = logs_path_file_name
         self.prime_path_file_name = prime_path_file_name
-        self.logs_file_name = logs_file_name
     def gmetrics(self):
         logs_folder_path = self.logs_folder_path 
         logs_file_name = self.logs_path_file_name 
@@ -30,15 +29,15 @@ class promt_default:
         prime_file = pandas.read_excel(prime_file_name, header=0)
 
         for index, row in logs_file.iterrows():
-            request_text = row["Question"]
-            response_text = row["Answer"]
-            used_files = row["Source"]
-            filtered_rows = prime_file.query(f"request_text == '{request_text}' & used_files == '{used_files}'")
+            request_text = row["request_text"]
+            response_text = row["response_text"]
+            used_files = row["used_files"]
+            filtered_rows = prime_file.query(f"request_text == '{request_text}'")
             if len(filtered_rows) == 0:
                 print ("По запросу " + request_text + " не найдено данных")
             else:
                 a1 = response_text
-                a2 = filtered_rows['Answer'].values
+                a2 = filtered_rows['response_text'].values
 
                 question = f"Ты учитель и проверяшь информацию от ученика. Тебе предоставлен ответ ученика {a1} и ты должен сравнить его с правильным ответом {a2}. При проверке учитывай точность информации. Если ответы идентинчны, то напиши (Ответ 1). Если ответы различаются, то напиши (Ответ 0) и укажи различия. Ответ дай на русском языке "
                 metrix_data = llm.invoke([HumanMessage(content=question)])
@@ -57,5 +56,5 @@ class promt_default:
                 metrics_file = pandas.concat([metrics_file, new_array], ignore_index=True)
                 metrics_file.to_csv(metrics_file_name, index=False, encoding='utf-8')
 
-        return metrics_file
+        return metrics_file_name
 

@@ -9,6 +9,7 @@ import datetime
 import time
 import io_json
 import re
+import rag_metrick
 
 
 # ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
@@ -204,7 +205,7 @@ def read_test_excel_file (file_name):
     if data_frame is None or data_frame.empty:
         raise ValueError('Excel-файл пуст или не содержит данных')
     
-    required_columns = {'Question', 'Answer', 'Source'}
+    required_columns = {'request_text', 'response_text', 'Source'}
     if not required_columns.issubset(data_frame.columns):
         raise ValueError(f'Отсутствуют необходимые колонки в файле: {required_columns - set(data_frame)}')
     
@@ -358,13 +359,13 @@ def handle_start_pipline(chatID):
         # Обработка колонки 'Question'   
         test_questions  = process_column(
             data_frame  = test_data,
-            column_name = 'Question',
-            description = f'Следующие вопросы из колонки "Question" будут использоваться в тестах',
+            column_name = 'request_text',
+            description = f'Следующие вопросы из колонки "request_text" будут использоваться в тестах',
             chatID      = chatID
         )
 
         if not test_questions or not isinstance(test_questions, list):
-            bot.send_message(chatID, 'Вопросы из колонки "Question" отсутствуют или не найдены')
+            bot.send_message(chatID, 'Вопросы из колонки "request_text" отсутствуют или не найдены')
             return
         
 # Если вопросы найдены, обработаем их
@@ -403,6 +404,12 @@ def handle_start_pipline(chatID):
 
         # Сообщаем о завершении
         bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
+        bot.send_message(chatID, "Запускаю подсчет метрик.")
+
+        # Вызов метрик
+        prime_file_path = os.path.join(task_for_test_folder, "prime.xlsx")
+        log_path_file_name = os.path.join(logs_folder_path, log_file_name)
+        file_metrick = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
 
         # Переключаемся на основной лог-файл
         logs_manager.switch_to_main_logs()
@@ -412,6 +419,12 @@ def handle_start_pipline(chatID):
 
     except Exception as e:
         bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
+
+def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
+    metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
+    file_metrick = metrick.gmetrics()
+    bot.send_message(chatID, f'Файл метрик: {file_metrick}')
+    return file_metrick
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
