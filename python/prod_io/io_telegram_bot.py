@@ -376,7 +376,7 @@ def handle_start_pipline(chatID):
 
         # Подготовка объекта db_helper для тестового пользователя
         db_helper = io_db.DbHelper(chatID, user_name=test_username)
-
+        used_files_path = io_file_operation.return_user_folder_pdf(test_username)
         # Поочередная обработка вопросов
         for idx, question in enumerate(test_questions, start=1):
 
@@ -394,7 +394,7 @@ def handle_start_pipline(chatID):
                 request_text    = question,
                 response_time   = datetime.datetime.now(),
                 response_text   = response,
-                used_files_path = "/path/to/files",
+                used_files_path = used_files_path,
                 rating          = None
             )
 
