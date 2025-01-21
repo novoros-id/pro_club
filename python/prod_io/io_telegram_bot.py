@@ -6,7 +6,7 @@ import os
 import shutil
 import pandas
 import datetime
-import time
+from threading import Timer
 import io_json
 import re
 import rag_metrick
@@ -33,10 +33,10 @@ class LogManager:
             print(f"Ошибка при чтении логов: {e}")
             return pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
 
-    # При $start_pipline создаем отдельный файл с логами
-    def create_log_pipline(self):
+    # При $start_pipeline создаем отдельный файл с логами
+    def create_log_pipeline(self):
         current_time = datetime.datetime.now()
-        log_file_name = f'test_pipline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        log_file_name = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
         log_file_path = os.path.join(self.logs_folder_path, log_file_name)
         
         try:
@@ -126,6 +126,7 @@ logs_folder_path = io_json.get_config_value('logs_folder_path')
 logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
 task_for_test_folder = io_json.get_config_value('task_for_test')
 bot = telebot.TeleBot(config.bot_token)
+user_context = {}
 
 HELP_BUTTON = 'Помощь'
 FILES_LIST_BUTTON = 'Загруженные файлы'
@@ -167,11 +168,10 @@ def help_bot(message):
 
 #  --= ТЕСТОВЫЙ КОНВЕйЕР =---
 #Создание тестового пользователя
-def create_test_user_for_pipline(chatID):
+def create_test_user_for_pipeline(chatID):
 
 # Создадим тестового пользователя
-    # test_chatID = chatID
-    test_username = 'test_user_pipline'
+    test_username = 'test_user_pipeline'
 
     users = io_json.get_user_folder('main_folder_path')
 
@@ -205,11 +205,87 @@ def read_test_excel_file (file_name):
     if data_frame is None or data_frame.empty:
         raise ValueError('Excel-файл пуст или не содержит данных')
     
-    required_columns = {'request_text', 'response_text', 'Source'}
+    required_columns = {'request_text', 'response_text', 'Source'} #TODO проверку нужно переписать с учетом def validate_file_structure
     if not required_columns.issubset(data_frame.columns):
         raise ValueError(f'Отсутствуют необходимые колонки в файле: {required_columns - set(data_frame)}')
     
     return data_frame
+
+# Функция для обработки загруженных файлов
+def handle_uploaded_file(message):
+    chatID = message.chat.id
+
+    print("Ничинаю загрузку файла")
+
+    # Проверяем, отправил ли пользователь файл
+    if not message.document:
+        bot.send_message(chatID, 'Ошибка: Файл можно загрузить после команды $update_prime')
+        return
+
+    file_name = message.document.file_name
+    file_size = message.document.file_size
+
+    # Проверка имени файла
+    if file_name != 'prime.xlsx':
+        bot.send_message(chatID, 'Бот ожидает файл prime.xlsx')
+        return
+    
+    # Проверка размера файла
+    if file_size > 50 * 1024 * 1024: # 50 MB
+        bot.send_message(chatID, 'Размер файла не должен превышать 50 Мб')
+        return
+
+    # Загружаем файл
+    file_id = message.document.file_id
+    file_info = bot.get_file(file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    # Сохраняем временный файл
+    temp_file_path = f"/tmp/{file_name}"
+    with open(temp_file_path, 'wb') as new_file:
+        new_file.write(downloaded_file)
+    
+    # Проверка содержимого файла
+    if not validate_file_structure(temp_file_path):
+        os.remove(temp_file_path) #удаляем временный файл
+        bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
+        return
+    
+    # Обновляем файл 
+    update_prime_file(temp_file_path, chatID)
+
+# Функция проверки нужных колонок при загрузки файла
+def validate_file_structure(file_path):
+    try:
+        df = pandas.read_excel(file_path)
+        required_columns = {'request_text', 'response_text', 'Source'}
+        return required_columns.issubset(df.columns)
+    except Exception as e:
+        return False
+
+# Функция для обновления файла prime.xlsx
+def update_prime_file(temp_file_path, chatID):
+    try:
+        task_folder = io_json.get_config_value('task_for_test')
+        zakroma_folder = io_file_operation.return_zakroma_folder()
+
+        prime_path = os.path.join(task_folder, 'prime.xlsx')
+        if os.path.exists(prime_path):
+            # Перемещаем старый файл в архив
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            archive_name = f'prime_{timestamp}.xlsx'
+            shutil.move(prime_path, os.path.join(zakroma_folder, archive_name))
+            bot.send_message(chatID, f'Предыдущий файл перемещен в zakroma_folder под именем {archive_name}')
+        
+        # Перемещаем новый файл
+        shutil.move(temp_file_path, prime_path)
+        bot.send_message(chatID, 'Файл успешно обновлен')
+    except Exception as e:
+        bot.send_message(chatID, f'Ошибка при обновлении файла: {str(e)}')
+    finally:
+        # Удаляем временный файл
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
 # Универсальная обработка колонок
 def process_column(data_frame, column_name, description, chatID, send_message=False):
@@ -228,34 +304,8 @@ def process_column(data_frame, column_name, description, chatID, send_message=Fa
         bot.send_message(chatID, f'Колонка "{column_name}" в файле отсутствует')
         return None
 
-# Функция ожидания обработки файла
-# TODO Нужно подумать как правильно реализовать и нужна ли вообще эта функция
-def wait_for_file_processing(chatID, test_username, file_name, timeout=300):
-
-    start_time = time.time()
-    # test_chatID = chatID
-    test_username = 'test_user_pipline'
-
-    # Цикл ожидания обработки файла
-    while time.time() - start_time < timeout:
-
-        # Получаем список файлов тестового пользователя
-        uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
-
-        if uploaded_files is None:
-            return False
-        
-        if set(file_name).issubset(set(uploaded_files)):
-            return True # Обрабатываемый файл загружен
-        
-        bot.send_message(chatID, f"Ожидание обработки файла {file_name}...")
-        time.sleep(30)  # Ждём 30 секунд перед повторной проверкой
-    
-    # Таймаут истек
-    return False
-
 # Функция получения списка файлов для тест-конвейера
-def initialize_pipline_source(chatID, excel_lile="prime.xlsx", send_message=False):
+def initialize_pipeline_source(chatID, excel_lile="prime.xlsx", send_message=False):
     
     #Загружаем данные из Excel
     try:
@@ -285,8 +335,8 @@ def initialize_pipline_source(chatID, excel_lile="prime.xlsx", send_message=Fals
 def simulate_upload_for_test_user(chatID):
     zakroma_folder = io_file_operation.return_zakroma_folder()
 
-    # Инициализация pipline через общую функцию
-    unique_sources = initialize_pipline_source(chatID, send_message=True)
+    # Инициализация pipeline через общую функцию
+    unique_sources = initialize_pipeline_source(chatID, send_message=True)
     if unique_sources is None:
         return False
 
@@ -294,8 +344,7 @@ def simulate_upload_for_test_user(chatID):
     pipeline.initialize_files(unique_sources)
 
     # Папка для файлов тестового пользователя
-    # test_chatID = 'test_user_pipline'
-    test_username = 'test_user_pipline'
+    test_username = 'test_user_pipeline'
     user_input_folder = io_file_operation.return_user_folder_input(test_username)
 
     # Создаем папку тестового пользователя, если её нет
@@ -329,12 +378,7 @@ def simulate_upload_for_test_user(chatID):
 
             # Обрабатываем файл как будто он был загружен пользователем
             bot.send_message(chatID, f'Запустили загрузку файлов. Нужно подождать...')
-            io_file_operation.process_files(chatID, test_username)
-
-            #Ожидаем завершения обработки файла
-            #TODO пока закомментировал. С этой функцией очень долго работает. Пока не понимаю почему
-            # if not wait_for_file_processing(chatID, test_username, file_name):
-            #     raise ValueError(f'файл {file_name} не обработан за отведенное время.')   
+            io_file_operation.process_files(chatID, test_username)  
 
         else:
             print(f'Файл {file_name} отсутствует в папке {user_input_folder}')
@@ -343,11 +387,15 @@ def simulate_upload_for_test_user(chatID):
     bot.send_message(chatID, 'Все файлы успешно обработаны')
     return True
 
-# Функция обработки команды $start_pipline
-def handle_start_pipline(chatID):
-    global logs_manager
+# Функция обработки команды $start_pipeline
+def handle_start_pipeline(chatID):
+    #global logs_manager
+    logs_folder_path_pipeline = io_json.get_config_value('task_for_test')
+    current_time = datetime.datetime.now()
+    logs_file_name_pipeline = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+    logs_manager_pipeline = LogManager(logs_folder_path_pipeline, logs_file_name_pipeline)
 
-    test_username = 'test_user_pipline'
+    test_username = 'test_user_pipeline'
 
     try:
         #Загружаем данные из Excel
@@ -372,8 +420,8 @@ def handle_start_pipline(chatID):
         total_questions = len(test_questions)
 
         # Создание лог-файла
-        log_file_name = logs_manager.create_log_pipline()
-        bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
+        #log_file_name = logs_manager.create_log_pipeline()
+        bot.send_message(chatID, f'Создан лог-файл: {logs_file_name_pipeline}')
 
         # Подготовка объекта db_helper для тестового пользователя
         db_helper = io_db.DbHelper(chatID, user_name=test_username)
@@ -382,16 +430,16 @@ def handle_start_pipline(chatID):
         for idx, question in enumerate(test_questions, start=1):
 
             # Отправляем вопрос и получаем ответ
-            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}.")
+            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {question}")
             print(f'[DEBUG] Отправляем вопрос: {question}')
             response = db_helper.get_answer(prompt=question)
             print(f'[DEBUG] Ответ содержит: {response}')
 
             # Запись в лог
-            logs_manager.log_interaction(
+            logs_manager_pipeline.log_interaction(
                 request_time    = datetime.datetime.now(),
                 chat_id         = chatID,  
-                user_name       = test_username, # Лог пишется от имени test_user_pipline
+                user_name       = test_username, # Лог пишется от имени test_user_pipeline
                 request_text    = question,
                 response_time   = datetime.datetime.now(),
                 response_text   = response,
@@ -400,7 +448,7 @@ def handle_start_pipline(chatID):
             )
 
             # Обновляем прогресс
-            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов.")
+            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {response} ")
 
         # Сообщаем о завершении
         bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
@@ -408,11 +456,14 @@ def handle_start_pipline(chatID):
 
         # Вызов метрик
         prime_file_path = os.path.join(task_for_test_folder, "prime.xlsx")
-        log_path_file_name = os.path.join(logs_folder_path, log_file_name)
-        file_metrick = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
+        log_path_file_name = os.path.join(logs_folder_path_pipeline, logs_file_name_pipeline)
+        file_metrick_ = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
+        doc = open(file_metrick_, 'rb')
+        bot.send_document(chatID, doc)
+        #bot.send_document(chatID, open(r'Путь_к_документу/Название_документа.txt, 'rb'))
 
         # Переключаемся на основной лог-файл
-        logs_manager.switch_to_main_logs()
+        #logs_manager.switch_to_main_logs()
 
     except FileNotFoundError as fnf_error:
         bot.send_message(chatID, str(fnf_error))
@@ -420,16 +471,21 @@ def handle_start_pipline(chatID):
     except Exception as e:
         bot.send_message(chatID, f'Ошибка при запуске конвейера: {e}')
 
+# Функция обработки RAG метрик
 def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
     metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
-    file_metrick = metrick.gmetrics()
-    bot.send_message(chatID, f'Файл метрик: {file_metrick}')
-    return file_metrick
+    try:
+        file_metrick = metrick.gmetrics()
+        bot.send_message(chatID, f'Файл метрик: {file_metrick}')
+        return file_metrick
+    except:
+        bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
+        return file_metrick  
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
 def handle_buttons(message):
-    text = message.text
+    text = message.text.strip()
     chatID = message.chat.id
     username = message.from_user.username
     io_file_operation.create_user(chatID, username)
@@ -448,19 +504,18 @@ def handle_buttons(message):
             response_text = f'Ошибка при получении списка пользователей: {e}'
         bot.send_message (chatID, response_text)
 
-    elif text.startswith ('$start_pipline'):
+    elif text.startswith ('$start_pipeline'):
         # 1. Инициализируем тестового пользователя
-        create_test_user_for_pipline(chatID)
+        create_test_user_for_pipeline(chatID)
        
         # 2. Проверяем наличие нужных для тест-конвейера файлов, загруженных в базу у тестового пользователя
         # Если нужных файлов нет, тогда все имеющиеся файлы будут удалены, а нужные будут загружены из zakroma_folder
-        # test_chatID = chatID
-        test_username = 'test_user_pipline'
+        test_username = 'test_user_pipeline'
         pipeline = TestPipeline()
 
         # Получаем список файлов тестового пользователя
-        uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
-        unique_sources = initialize_pipline_source(chatID)
+        uploaded_files = io_file_operation.get_list_files_for_pipeline(chatID, test_username)
+        unique_sources = initialize_pipeline_source(chatID)
         if unique_sources is None:
             return
         
@@ -496,7 +551,7 @@ def handle_buttons(message):
                 return
 
             #После успешной загрузки выполняем повторную проверку наличия необходимых файлов
-            uploaded_files = io_file_operation.get_list_files_for_pipline(chatID, test_username)
+            uploaded_files = io_file_operation.get_list_files_for_pipeline(chatID, test_username)
             if set(pipeline.unique_source_files).issubset(set(uploaded_files)):
                 bot.send_message(chatID, 'Файлы успешно найдены. Запусткаем тест-конвейер.')
                 # Переходим к "3. Запуск тест-конвейера"
@@ -505,7 +560,16 @@ def handle_buttons(message):
                 bot.send_message(chatID, f'Не удалость найти для запуска тест-конвейера следующие файлы: {pipeline.unique_source_files}\nПопытки запуска тест-конвейера остановлены')
         
         # 3. Запуск тест-конвейера
-        handle_start_pipline(chatID)
+        handle_start_pipeline(chatID)
+
+    #elif text.startswith ('$update_prime'):
+        # Устанавливаем контекст для пользователя
+        #user_context[chatID] = 'awaiting_file'
+        #bot.send_message(chatID, 'Пожалуйста, загрузите файл prime.xlsx')
+        # Таймаут для очистки контекста 5 минут
+        #Timer(300, lambda:user_context.pop(chatID, None)).start()
+        # Вызываем обработчик загруженного файла
+        #bot.register_next_step_handler(message, handle_uploaded_file)
 
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
@@ -528,6 +592,9 @@ def handle_buttons(message):
     
     elif text == HELP_BUTTON:    
         help_bot(message)
+
+    elif text.startswith ('$help'):
+        bot.send_message(chatID, 'Доступные сервисные команды:\n$start_pipeline\n$update_prime\n$get_user')
 
     elif text == FILES_LIST_BUTTON:
         io_file_operation.get_list_files(chatID, username)
@@ -589,18 +656,37 @@ def handle_document(message):
     file_info = bot.get_file(message.document.file_id)
     file_name = message.document.file_name
 
-    dowloaded_file = bot.download_file(file_info.file_path)
-    user_input_folder = io_file_operation.return_user_folder_input(username)
-    save_path = os.path.join(user_input_folder, file_name)
-    
-    with open(save_path, 'wb') as new_file:
-        new_file.write(dowloaded_file)
+    if file_name == "prime.xlsx":
+        print ("Загрузка файла prime.xlsx")
+        # Загружаем файл
+        file_id = message.document.file_id
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
 
-    bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+        # Сохраняем временный файл
+        temp_file_path = f"/tmp/{file_name}"
+        with open(temp_file_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        
+        # Проверка содержимого файла
+        if not validate_file_structure(temp_file_path):
+            os.remove(temp_file_path) #удаляем временный файл
+            bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
+            return
+        
+        # Обновляем файл 
+        update_prime_file(temp_file_path, chatID)
+    else:
+        dowloaded_file = bot.download_file(file_info.file_path)
+        user_input_folder = io_file_operation.return_user_folder_input(username)
+        save_path = os.path.join(user_input_folder, file_name)
+        
+        with open(save_path, 'wb') as new_file:
+            new_file.write(dowloaded_file)
 
-    io_file_operation.process_files(chatID, username)
-
-    bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
+        bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+        io_file_operation.process_files(chatID, username)
+        bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
 
 # ---= ОБРАБОТКА НЕПОДДЕРЖИВАЕМЫХ ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])
