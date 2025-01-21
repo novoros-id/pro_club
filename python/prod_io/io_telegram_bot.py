@@ -470,7 +470,11 @@ def handle_start_pipeline(chatID):
 # Функция обработки RAG метрик
 def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
     metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
-    file_metrick = metrick.gmetrics()
+    try:
+        file_metrick = metrick.gmetrics()
+    except:
+        bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
+        return file_metrick
     bot.send_message(chatID, f'Файл метрик: {file_metrick}')
     return file_metrick
 
