@@ -215,6 +215,8 @@ def read_test_excel_file (file_name):
 def handle_uploaded_file(message):
     chatID = message.chat.id
 
+    print("Ничинаю загрузку файла")
+
     # Проверяем, отправил ли пользователь файл
     if not message.document:
         bot.send_message(chatID, 'Ошибка: Файл можно загрузить после команды $update_prime')
@@ -270,7 +272,7 @@ def update_prime_file(temp_file_path, chatID):
         prime_path = os.path.join(task_folder, 'prime.xlsx')
         if os.path.exists(prime_path):
             # Перемещаем старый файл в архив
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             archive_name = f'prime_{timestamp}.xlsx'
             shutil.move(prime_path, os.path.join(zakroma_folder, archive_name))
             bot.send_message(chatID, f'Предыдущий файл перемещен в zakroma_folder под именем {archive_name}')
@@ -387,7 +389,11 @@ def simulate_upload_for_test_user(chatID):
 
 # Функция обработки команды $start_pipeline
 def handle_start_pipeline(chatID):
-    global logs_manager
+    #global logs_manager
+    logs_folder_path_pipeline = io_json.get_config_value('task_for_test')
+    current_time = datetime.datetime.now()
+    logs_file_name_pipeline = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+    logs_manager_pipeline = LogManager(logs_folder_path_pipeline, logs_file_name_pipeline)
 
     test_username = 'test_user_pipeline'
 
@@ -414,8 +420,8 @@ def handle_start_pipeline(chatID):
         total_questions = len(test_questions)
 
         # Создание лог-файла
-        log_file_name = logs_manager.create_log_pipeline()
-        bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
+        #log_file_name = logs_manager.create_log_pipeline()
+        bot.send_message(chatID, f'Создан лог-файл: {logs_file_name_pipeline}')
 
         # Подготовка объекта db_helper для тестового пользователя
         db_helper = io_db.DbHelper(chatID, user_name=test_username)
@@ -424,13 +430,13 @@ def handle_start_pipeline(chatID):
         for idx, question in enumerate(test_questions, start=1):
 
             # Отправляем вопрос и получаем ответ
-            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}.")
+            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {question}")
             print(f'[DEBUG] Отправляем вопрос: {question}')
             response = db_helper.get_answer(prompt=question)
             print(f'[DEBUG] Ответ содержит: {response}')
 
             # Запись в лог
-            logs_manager.log_interaction(
+            logs_manager_pipeline.log_interaction(
                 request_time    = datetime.datetime.now(),
                 chat_id         = chatID,  
                 user_name       = test_username, # Лог пишется от имени test_user_pipeline
@@ -442,7 +448,7 @@ def handle_start_pipeline(chatID):
             )
 
             # Обновляем прогресс
-            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов.")
+            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {response} ")
 
         # Сообщаем о завершении
         bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
@@ -450,11 +456,14 @@ def handle_start_pipeline(chatID):
 
         # Вызов метрик
         prime_file_path = os.path.join(task_for_test_folder, "prime.xlsx")
-        log_path_file_name = os.path.join(logs_folder_path, log_file_name)
-        file_metrick = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
+        log_path_file_name = os.path.join(logs_folder_path_pipeline, logs_file_name_pipeline)
+        file_metrick_ = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
+        doc = open(file_metrick_, 'rb')
+        bot.send_document(chatID, doc)
+        #bot.send_document(chatID, open(r'Путь_к_документу/Название_документа.txt, 'rb'))
 
         # Переключаемся на основной лог-файл
-        logs_manager.switch_to_main_logs()
+        #logs_manager.switch_to_main_logs()
 
     except FileNotFoundError as fnf_error:
         bot.send_message(chatID, str(fnf_error))
@@ -465,9 +474,13 @@ def handle_start_pipeline(chatID):
 # Функция обработки RAG метрик
 def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
     metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
-    file_metrick = metrick.gmetrics()
-    bot.send_message(chatID, f'Файл метрик: {file_metrick}')
-    return file_metrick
+    try:
+        file_metrick = metrick.gmetrics()
+        bot.send_message(chatID, f'Файл метрик: {file_metrick}')
+        return file_metrick
+    except:
+        bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
+        return file_metrick  
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
@@ -549,14 +562,14 @@ def handle_buttons(message):
         # 3. Запуск тест-конвейера
         handle_start_pipeline(chatID)
 
-    elif text.startswith ('$update_prime'):
+    #elif text.startswith ('$update_prime'):
         # Устанавливаем контекст для пользователя
-        user_context[chatID] = 'awaiting_file'
-        bot.send_message(chatID, 'Пожалуйста, загрузите файл prime.xlsx')
+        #user_context[chatID] = 'awaiting_file'
+        #bot.send_message(chatID, 'Пожалуйста, загрузите файл prime.xlsx')
         # Таймаут для очистки контекста 5 минут
-        Timer(300, lambda:user_context.pop(chatID, None)).start()
+        #Timer(300, lambda:user_context.pop(chatID, None)).start()
         # Вызываем обработчик загруженного файла
-        bot.register_next_step_handler(message, handle_uploaded_file)
+        #bot.register_next_step_handler(message, handle_uploaded_file)
 
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
@@ -643,18 +656,37 @@ def handle_document(message):
     file_info = bot.get_file(message.document.file_id)
     file_name = message.document.file_name
 
-    dowloaded_file = bot.download_file(file_info.file_path)
-    user_input_folder = io_file_operation.return_user_folder_input(username)
-    save_path = os.path.join(user_input_folder, file_name)
-    
-    with open(save_path, 'wb') as new_file:
-        new_file.write(dowloaded_file)
+    if file_name == "prime.xlsx":
+        print ("Загрузка файла prime.xlsx")
+        # Загружаем файл
+        file_id = message.document.file_id
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
 
-    bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+        # Сохраняем временный файл
+        temp_file_path = f"/tmp/{file_name}"
+        with open(temp_file_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        
+        # Проверка содержимого файла
+        if not validate_file_structure(temp_file_path):
+            os.remove(temp_file_path) #удаляем временный файл
+            bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
+            return
+        
+        # Обновляем файл 
+        update_prime_file(temp_file_path, chatID)
+    else:
+        dowloaded_file = bot.download_file(file_info.file_path)
+        user_input_folder = io_file_operation.return_user_folder_input(username)
+        save_path = os.path.join(user_input_folder, file_name)
+        
+        with open(save_path, 'wb') as new_file:
+            new_file.write(dowloaded_file)
 
-    io_file_operation.process_files(chatID, username)
-
-    bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
+        bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+        io_file_operation.process_files(chatID, username)
+        bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
 
 # ---= ОБРАБОТКА НЕПОДДЕРЖИВАЕМЫХ ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['photo', 'audio', 'video', 'voice', 'sticker', 'animation', 'video_note'])
