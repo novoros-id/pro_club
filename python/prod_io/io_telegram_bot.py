@@ -389,7 +389,11 @@ def simulate_upload_for_test_user(chatID):
 
 # Функция обработки команды $start_pipeline
 def handle_start_pipeline(chatID):
-    global logs_manager
+    #global logs_manager
+    logs_folder_path_pipeline = io_json.get_config_value('task_for_test')
+    current_time = datetime.datetime.now()
+    logs_file_name_pipeline = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+    logs_manager_pipeline = LogManager(logs_folder_path_pipeline, logs_file_name_pipeline)
 
     test_username = 'test_user_pipeline'
 
@@ -416,8 +420,8 @@ def handle_start_pipeline(chatID):
         total_questions = len(test_questions)
 
         # Создание лог-файла
-        log_file_name = logs_manager.create_log_pipeline()
-        bot.send_message(chatID, f'Создан лог-файл: {log_file_name}')
+        #log_file_name = logs_manager.create_log_pipeline()
+        bot.send_message(chatID, f'Создан лог-файл: {logs_file_name_pipeline}')
 
         # Подготовка объекта db_helper для тестового пользователя
         db_helper = io_db.DbHelper(chatID, user_name=test_username)
@@ -432,7 +436,7 @@ def handle_start_pipeline(chatID):
             print(f'[DEBUG] Ответ содержит: {response}')
 
             # Запись в лог
-            logs_manager.log_interaction(
+            logs_manager_pipeline.log_interaction(
                 request_time    = datetime.datetime.now(),
                 chat_id         = chatID,  
                 user_name       = test_username, # Лог пишется от имени test_user_pipeline
@@ -452,14 +456,14 @@ def handle_start_pipeline(chatID):
 
         # Вызов метрик
         prime_file_path = os.path.join(task_for_test_folder, "prime.xlsx")
-        log_path_file_name = os.path.join(logs_folder_path, log_file_name)
-        file_metrick = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
-        doc = open(file_metrick, 'rb')
+        log_path_file_name = os.path.join(logs_folder_path_pipeline, logs_file_name_pipeline)
+        file_metrick_ = metrick_start(chatID, task_for_test_folder, log_path_file_name, prime_file_path)
+        doc = open(file_metrick_, 'rb')
         bot.send_document(chatID, doc)
         #bot.send_document(chatID, open(r'Путь_к_документу/Название_документа.txt, 'rb'))
 
         # Переключаемся на основной лог-файл
-        logs_manager.switch_to_main_logs()
+        #logs_manager.switch_to_main_logs()
 
     except FileNotFoundError as fnf_error:
         bot.send_message(chatID, str(fnf_error))
@@ -472,11 +476,11 @@ def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path)
     metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
     try:
         file_metrick = metrick.gmetrics()
+        bot.send_message(chatID, f'Файл метрик: {file_metrick}')
+        return file_metrick
     except:
         bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
-        return file_metrick
-    bot.send_message(chatID, f'Файл метрик: {file_metrick}')
-    return file_metrick
+        return file_metrick  
 
 # ---= ОБРАБОТКА ТЕКСТОВЫХ КОМАНД =---
 @bot.message_handler(content_types=['text'])
