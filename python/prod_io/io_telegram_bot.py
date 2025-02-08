@@ -241,7 +241,7 @@ def handle_uploaded_file(message):
     downloaded_file = bot.download_file(file_info.file_path)
 
     # Сохраняем временный файл
-    temp_file_path = f"/tmp/{file_name}"
+    temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
     with open(temp_file_path, 'wb') as new_file:
         new_file.write(downloaded_file)
     
@@ -562,15 +562,6 @@ def handle_buttons(message):
         # 3. Запуск тест-конвейера
         handle_start_pipeline(chatID)
 
-    #elif text.startswith ('$update_prime'):
-        # Устанавливаем контекст для пользователя
-        #user_context[chatID] = 'awaiting_file'
-        #bot.send_message(chatID, 'Пожалуйста, загрузите файл prime.xlsx')
-        # Таймаут для очистки контекста 5 минут
-        #Timer(300, lambda:user_context.pop(chatID, None)).start()
-        # Вызываем обработчик загруженного файла
-        #bot.register_next_step_handler(message, handle_uploaded_file)
-
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
             match = re.match(r'\$(\w+)\s(.+)', text)
@@ -594,7 +585,7 @@ def handle_buttons(message):
         help_bot(message)
 
     elif text.startswith ('$help'):
-        bot.send_message(chatID, 'Доступные сервисные команды:\n$start_pipeline\n$update_prime\n$get_user')
+        bot.send_message(chatID, 'Доступные сервисные команды:\n$start_pipeline\n$get_user')
 
     elif text == FILES_LIST_BUTTON:
         io_file_operation.get_list_files(chatID, username)
@@ -664,7 +655,7 @@ def handle_document(message):
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Сохраняем временный файл
-        temp_file_path = f"/tmp/{file_name}"
+        temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
         with open(temp_file_path, 'wb') as new_file:
             new_file.write(downloaded_file)
         
