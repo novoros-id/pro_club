@@ -389,13 +389,17 @@ def simulate_upload_for_test_user(chatID):
 
 # Функция обработки команды $start_pipeline
 def handle_start_pipeline(chatID):
-    #global logs_manager
     logs_folder_path_pipeline = io_json.get_config_value('task_for_test')
     current_time = datetime.datetime.now()
     logs_file_name_pipeline = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
     logs_manager_pipeline = LogManager(logs_folder_path_pipeline, logs_file_name_pipeline)
-
+    max_telegram_message_length = 3800 # На самом деле максимально телега в одно сообщение может уместить 4096, но я уменьшил с запасом
     test_username = 'test_user_pipeline'
+
+    # Обрезает текст, если он превышает mmax_length, добавляя '...' в концу
+    def truncate_text(text, max_length=max_telegram_message_length):
+        return text if len(text) <=max_length else text[:max_length] + "..."
+
 
     try:
         #Загружаем данные из Excel
@@ -416,7 +420,7 @@ def handle_start_pipeline(chatID):
             bot.send_message(chatID, 'Вопросы из колонки "request_text" отсутствуют или не найдены')
             return
         
-# Если вопросы найдены, обработаем их
+        # Если вопросы найдены, обработаем их
         total_questions = len(test_questions)
 
         # Создание лог-файла
@@ -429,11 +433,19 @@ def handle_start_pipeline(chatID):
         # Поочередная обработка вопросов
         for idx, question in enumerate(test_questions, start=1):
 
+            # Обрезаем текст вопроса, если он слишком длинный
+            truncated_question = truncate_text(question)
+
             # Отправляем вопрос и получаем ответ
-            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {question}")
-            print(f'[DEBUG] Отправляем вопрос: {question}')
+            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {truncated_question}")
+            print(f'[DEBUG] Отправляем вопрос: {truncated_question}')
+
+            # Получаем ответ
             response = db_helper.get_answer(prompt=question)
-            print(f'[DEBUG] Ответ содержит: {response}')
+
+            # Обрезаем ответ, если он слишком длинный
+            truncated_response = truncate_text(response)
+            print(f'[DEBUG] Ответ содержит: {truncated_response}')
 
             # Запись в лог
             logs_manager_pipeline.log_interaction(
@@ -448,7 +460,7 @@ def handle_start_pipeline(chatID):
             )
 
             # Обновляем прогресс
-            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {response} ")
+            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {truncated_response} ")
 
         # Сообщаем о завершении
         bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
