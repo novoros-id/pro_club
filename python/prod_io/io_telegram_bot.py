@@ -491,6 +491,7 @@ def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path)
         bot.send_message(chatID, f'Файл метрик: {file_metrick}')
         return file_metrick
     except:
+        file_metrick = log_file_name
         bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
         return file_metrick  
 

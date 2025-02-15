@@ -53,7 +53,9 @@ class rag_metrick:
                     'metrics'        : metrix_data
                 }])
 
-                metrics_file = pandas.concat([metrics_file, new_array], ignore_index=True)
+                metrics_file = metrics_file.dropna(axis=1, how='all')
+                new_array = new_array.dropna(axis=1, how='all')
+                metrics_file = pandas.concat([metrics_file.dropna(axis=1, how='all'), new_array], ignore_index=True)
                 metrics_file.to_csv(metrics_file_name, index=False, encoding='utf-8')
 
         return metrics_file_name
