@@ -77,6 +77,8 @@ class sfDOCXImageExtractor:
                         try:
                             image_data = docx_zip.read(file)
                             image = Image.open(io.BytesIO(image_data))
+                            if image.format == 'WMF':
+                                image = image.convert('RGB') # Конвертируем WMF в поддерживаемый pytesseract формат 
                             text = pytesseract.image_to_string(image).strip()
                             if text:
                                 ocr_text.append(text)

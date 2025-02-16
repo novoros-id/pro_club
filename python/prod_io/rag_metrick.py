@@ -32,7 +32,9 @@ class rag_metrick:
             request_text = row["request_text"]
             response_text = row["response_text"]
             used_files = row["used_files"]
-            filtered_rows = prime_file.query(f"request_text == '{request_text}'")
+            # Удаляем символы новой строки и другие пробельные символы
+            safe_request_text = request_text.replace('\n', '').replace('\r', '')
+            filtered_rows = prime_file.query(f"request_text == '{safe_request_text}'")
             if len(filtered_rows) == 0:
                 print ("По запросу " + request_text + " не найдено данных")
             else:
