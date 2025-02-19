@@ -3,6 +3,49 @@ import io
 from abc import ABC, abstractmethod
 from langchain.docstore.document import Document as LangDocument
 
+class sf_default:
+    def __init__(self, file_path):
+        self.file_path = file_path
+    def separate_file(self):
+        import os
+        from langchain_community.document_loaders import PyPDFLoader
+        from langchain_community.document_loaders import Docx2txtLoader
+        from langchain.text_splitter import (
+            RecursiveCharacterTextSplitter,
+        )
+        basename, extension = os.path.splitext(self.file_path)
+
+        match extension:
+            case ".docx":
+                loader = Docx2txtLoader(self.file_path)
+            case ".pdf":  
+                loader = PyPDFLoader(self.file_path)
+            case _:
+                print(f"Данный файл не поддерживается {self.file_path}")
+                return []
+
+        documents = loader.load()
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=200,)
+        documents = text_splitter.split_documents(documents)
+
+        return documents
+    
+class sf_DataProcessing:
+    def __init__(self, file_path):
+        self.file_path = file_path
+    def separate_file(self):
+        from langchain.text_splitter import (
+            RecursiveCharacterTextSplitter,
+        )
+
+        loader = sfDocumentLoaderFactory.create_loader(self.file_path) 
+        documents = loader.load_documents() 
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200) 
+        documents = text_splitter.split_documents(documents)
+
+        return documents
+
 # Абстрактный базовый класс для загрузчиков документов
 class sfBaseDocumentLoader(ABC):
     @abstractmethod
@@ -59,34 +102,34 @@ class sfDOCXTableExtractor:
             print(f"Ошибка извлечения таблиц: {e}")
             return ""
 
-# Класс для извлечения изображений из DOCX и применения OCR        
-class sfDOCXImageExtractor:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
+# # Класс для извлечения изображений из DOCX и применения OCR        
+# class sfDOCXImageExtractor:
+#     def __init__(self, file_path: str):
+#         self.file_path = file_path
 
-    def extract_images_text(self) -> str:
-        import zipfile
-        import pytesseract
-        from PIL import Image
+#     def extract_images_text(self) -> str:
+#         import zipfile
+#         import pytesseract
+#         from PIL import Image
 
-        ocr_text = []
-        try:
-            with zipfile.ZipFile(self.file_path) as docx_zip:
-                for file in docx_zip.namelist():
-                    if file.startswith("word/media/"):
-                        try:
-                            image_data = docx_zip.read(file)
-                            image = Image.open(io.BytesIO(image_data))
-                            if image.format == 'WMF':
-                                image = image.convert('RGB') # Конвертируем WMF в поддерживаемый pytesseract формат 
-                            text = pytesseract.image_to_string(image).strip()
-                            if text:
-                                ocr_text.append(text)
-                        except Exception as img_e:
-                            print(f"Ошибка обработки изображения {file}: {img_e}")
-        except Exception as e:
-            print (f"Ошибка открытия DOCX как zip-архива: {e}")
-        return "\n\n".join(ocr_text)
+#         ocr_text = []
+#         try:
+#             with zipfile.ZipFile(self.file_path) as docx_zip:
+#                 for file in docx_zip.namelist():
+#                     if file.startswith("word/media/"):
+#                         try:
+#                             image_data = docx_zip.read(file)
+#                             image = Image.open(io.BytesIO(image_data))
+#                             if image.format == 'WMF':
+#                                 image = image.convert('RGB') # Конвертируем WMF в поддерживаемый pytesseract формат 
+#                             text = pytesseract.image_to_string(image).strip()
+#                             if text:
+#                                 ocr_text.append(text)
+#                         except Exception as img_e:
+#                             print(f"Ошибка обработки изображения {file}: {img_e}")
+#         except Exception as e:
+#             print (f"Ошибка открытия DOCX как zip-архива: {e}")
+#         return "\n\n".join(ocr_text)
             
 # Фабрика для обработки DOCX (извлечение текста, таблиц, изображения
 class sfDOCXLoader(sfBaseDocumentLoader):
@@ -95,7 +138,7 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         self.loader_type = loader_type
         self.text_extractor = sfDOCXTextExtractor(file_path)
         self.table_extractor = sfDOCXTableExtractor(file_path)
-        self.image_extractor = sfDOCXImageExtractor(file_path)
+        # self.image_extractor = sfDOCXImageExtractor(file_path)
 
     def load_documents(self):
         documents = []
@@ -110,10 +153,10 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         if table_text.strip():
             documents.append(LangDocument(page_content=table_text))
 
-        # Извлечение текста из изображений
-        images_text = self.image_extractor.extract_images_text()
-        if images_text.strip():
-            documents.append(LangDocument(page_content=images_text))
+        # # Извлечение текста из изображений
+        # images_text = self.image_extractor.extract_images_text()
+        # if images_text.strip():
+        #     documents.append(LangDocument(page_content=images_text))
 
         return documents
 
@@ -129,9 +172,10 @@ class sfPDFTextExtractor:
             for block in page_dict.get("blocks", []):
                 if "text" in block and block["text"].strip():
                     analysis["contains_text"] = True
-                if "image" in block:
-                    analysis["contains_images"] = True
+                # if "image" in block:
+                #     analysis["contains_images"] = True
                 if "lines" in block:
+                    print(f"Страница {page.number + 1}: Найдено {len(block['lines'])} линий")
                     analysis["contains_tables"] = True
         except Exception as e:
             print(f"Ошибка анализа страницы: {e}")
@@ -145,15 +189,15 @@ class sfPDFTextExtractor:
                 text = page.get_text("text").strip()
             except Exception as e:
                 print(f"Ошибка извлечения текста: {e}")
-        elif analysis["contains_images"]:
-            try:
-                pix = page.get_pixmap()
-                from PIL import Image
-                image = Image.open(io.BytesIO(pix.tobytes()))
-                import pytesseract
-                text = pytesseract.image_to_string(image).strip()
-            except Exception as e:
-                print(f"Ошибка OCR: {e}")
+        # elif analysis["contains_images"]:
+        #     try:
+        #         pix = page.get_pixmap()
+        #         from PIL import Image
+        #         image = Image.open(io.BytesIO(pix.tobytes()))
+        #         import pytesseract
+        #         text = pytesseract.image_to_string(image).strip()
+        #     except Exception as e:
+        #         print(f"Ошибка OCR: {e}")
         return text
 
 # Класс для извлечения таблиц из PDF
@@ -246,34 +290,31 @@ class sfPDFLoader(sfBaseDocumentLoader):
         return documents
 
 # Класс для разделения текста на чанки
-class sfTextSplitter:
-    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 200):
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        self.splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+# class sfTextSplitter:
+#     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 200):
+#         from langchain.text_splitter import RecursiveCharacterTextSplitter
+#         self.splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     
-    def split(self, documents):
-        return self.splitter.split_documents(documents)
+#     def split(self, documents):
+#         return self.splitter.split_documents(documents)
 
 # Фабрика загрузчиков, которая определяет тип файла и возвращает нужный загрузчик
 class sfDocumentLoaderFactory:
     @staticmethod
-    def create_loader(file_path: str, **kwargs):
+    def create_loader(file_path: str):
         ext = sfFileTypeDetector.get_file_type(file_path)
         if ext == ".pdf":
-            loader_type = kwargs.get("pdf_loader", "unstructured")
-            return sfPDFLoader(file_path, loader_type=loader_type)
+            return sfPDFLoader(file_path, loader_type="unstructured")
         elif ext == ".docx":
-            # loader_type = kwargs.get("docx_loader", "docx2txt")
-            loader_type = kwargs.get("python-docx")
-            return sfDOCXLoader(file_path, loader_type=loader_type)
+            return sfDOCXLoader(file_path, loader_type="python-docx")
         else:
             raise ValueError(f"Неподдерживаемый формат файла: {ext}")
 
 #  Конвейер обработки документа: загрузка -> разделение на чанки
 class sfDocumentProcessingPipeline:
-    def __init__(self, file_path: str, chunk_size: int = 500, chunk_overlap: int = 200, **loader_kwargs):
-        self.loader = sfDocumentLoaderFactory.create_loader(file_path, **loader_kwargs)
-        self.splitter = sfTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    def __init__(self, file_path: str):
+        self.loader = sfDocumentLoaderFactory.create_loader(file_path)
+        # self.splitter = sfTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     
     def separate_file(self):
         documents = self.loader.load_documents()
