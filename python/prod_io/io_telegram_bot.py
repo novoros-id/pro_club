@@ -241,18 +241,18 @@ def handle_uploaded_file(message):
     downloaded_file = bot.download_file(file_info.file_path)
 
     # Сохраняем временный файл
-    temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
-    with open(temp_file_path, 'wb') as new_file:
-        new_file.write(downloaded_file)
+    # temp_file_path = f"/tmp/{file_name}"
+    # with open(temp_file_path, 'wb') as new_file:
+    #     new_file.write(downloaded_file)
     
-    # Проверка содержимого файла
-    if not validate_file_structure(temp_file_path):
-        os.remove(temp_file_path) #удаляем временный файл
-        bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
-        return
+    # # Проверка содержимого файла
+    # if not validate_file_structure(temp_file_path):
+    #     os.remove(temp_file_path) #удаляем временный файл
+    #     bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
+    #     return
     
     # Обновляем файл 
-    update_prime_file(temp_file_path, chatID)
+    update_prime_file(downloaded_file, chatID)
 
 # Функция проверки нужных колонок при загрузки файла
 def validate_file_structure(file_path):
@@ -668,18 +668,18 @@ def handle_document(message):
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Сохраняем временный файл
-        temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
-        with open(temp_file_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
+        # temp_file_path = f"/tmp/{file_name}"
+        # with open(temp_file_path, 'wb') as new_file:
+        #     new_file.write(downloaded_file)
         
-        # Проверка содержимого файла
-        if not validate_file_structure(temp_file_path):
-            os.remove(temp_file_path) #удаляем временный файл
-            bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
-            return
+        # # Проверка содержимого файла
+        # if not validate_file_structure(temp_file_path):
+        #     os.remove(temp_file_path) #удаляем временный файл
+        #     bot.send_message(chatID, "Ошибка: Файл должен содержать колонки 'request_text', 'response_text', 'Source'")
+        #     return
         
         # Обновляем файл 
-        update_prime_file(temp_file_path, chatID)
+        update_prime_file(downloaded_file, chatID)
     else:
         dowloaded_file = bot.download_file(file_info.file_path)
         user_input_folder = io_file_operation.return_user_folder_input(username)

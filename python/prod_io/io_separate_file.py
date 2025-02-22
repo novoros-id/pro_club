@@ -278,7 +278,7 @@ class sfPDFLoader(sfBaseDocumentLoader):
             loader = PyPDFLoader(self.file_path)
         elif self.loader_type == "unstructured":
             from langchain_community.document_loaders import UnstructuredPDFLoader
-            loader = UnstructuredPDFLoader(self.file_path)
+            loader = UnstructuredPDFLoader(self.file_path, languages=["ru"])
         else:
             raise ValueError(f"Неизвестный тип загрузчика для PDF: {self.loader_type}")
         
