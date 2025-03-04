@@ -5,7 +5,7 @@ import app.utils.io_json as io_json
 import app.utils.io_universal as io_universal
 from app.config import settings
 
-from app.models import UserBase
+from app.models import UserRequest
 
 
 class FileService:
@@ -43,7 +43,7 @@ class FileService:
         user_folder_path = self.return_user_folder(user_name)
         return (os.path.join(user_folder_path, "db"))
     
-    def get_list_files(self, user: UserBase) -> Any:
+    def get_list_files(self, user: UserRequest) -> Any:
         input_user_files = self.return_user_folder_input(user.name)
         files = os.listdir(input_user_files)
         result = '\n'.join(files)

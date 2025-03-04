@@ -1,10 +1,18 @@
 import uuid
 from pydantic import BaseModel
 
-""" class AnyRequest(UserBase): """
+class AnyRequestBase(BaseModel):
+    username: str
+    program_uid: str
+    request_uid: str
 
+class UserRequest(AnyRequestBase):
+    pass
 
-class UserCheck(BaseModel):
+class UserBase(BaseModel):
+    username: str
+
+""" class UserCheck(BaseModel):
     id: str
     name: str
 
@@ -17,6 +25,7 @@ class UserPublic(BaseModel):
     id: str
     name: str
     email: str | None
+"""
 
 class Question(BaseModel):
     user_id: str
@@ -24,4 +33,4 @@ class Question(BaseModel):
 
 class QuestionPublic(BaseModel):
     user_id: str
-    answer: str
+    answer: str 
