@@ -6,6 +6,7 @@ class promt_default:
         self.data = data
         self.prompt = prompt
     def get_promt(self):
+        print(self.data)
         return f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {self.data}. Ответь на русском языке на этот запрос: {self.prompt} и укажи source "
     
 class promt_test:

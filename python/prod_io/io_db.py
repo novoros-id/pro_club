@@ -71,6 +71,7 @@ class DbHelper:
             return
         
         for file_item in pdf_files_list:
+            print(file_item)
             separate_text = self.separate_file(file_item)
             embedding = self.get_embeddings()
             self.put_vector_in_db(separate_text, embedding)
