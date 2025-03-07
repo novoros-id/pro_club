@@ -1,12 +1,11 @@
 from fastapi import HTTPException, status
-from app.services.file_service import FileService
+from app.services.file_service import create_folder_structure
 
 from app.models import UserRequest, UserBase
 
 class UserService:
 
-    def __init__(self, file_service: FileService):
-        self.file_service = file_service
+    def __init__(self):
         self.users_db = self.get_users_db()
  
     # Функия имитирующая БД
@@ -32,7 +31,7 @@ class UserService:
         user = self.get_user_by_id(user_check.username)
         if user == None:
             user = self.create_user(user_check)
-            self.file_service.create_folder_structure(user.name)
+            create_folder_structure(user.name)
         return True
     
 

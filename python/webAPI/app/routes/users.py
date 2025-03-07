@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Annotated
 from app.services.user_service import UserService
-from app.services.file_service import FileService
 from app.models import UserRequest
 
-file_service = FileService()
-user_service = UserService(file_service)
+user_service = UserService()
 
 router = APIRouter(prefix="/users", tags=["users"])
 

@@ -10,22 +10,16 @@ class UserRequest(AnyRequestBase):
     pass
 
 class UserBase(BaseModel):
-    username: str
+    username: str 
 
-""" class UserCheck(BaseModel):
-    id: str
-    name: str
+class StatusResponse(AnyRequestBase):
+    status: str
 
-class UserBase(BaseModel):
-    id: str
-    name: str
-    email: str | None
+class SimpleRequest(AnyRequestBase):
+    request : str | None = None
 
-class UserPublic(BaseModel):
-    id: str
-    name: str
-    email: str | None
-"""
+class SimpleResponse(AnyRequestBase):
+    answer: str | None = None
 
 class Question(BaseModel):
     user_id: str
