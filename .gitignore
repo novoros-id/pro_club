@@ -1354,3 +1354,4 @@ python/webAPI/app/services/__pycache__/user_service.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/config.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/io_json.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/io_universal.cpython-312.pyc
+python/telegram_bot/.env
