@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from app.services.file_service import create_folder_structure
 
-from app.models import UserRequest, UserBase
+from app.models import UserBase
 
 class UserService:
 
@@ -9,10 +9,11 @@ class UserService:
         self.users_db = self.get_users_db()
  
     # Функия имитирующая БД
+    # todo: переделать
     def get_users_db(self) -> dict:
         users = [
-            UserBase(username="dakinfiev"),
-            UserBase(username="Jon"),
+            UserBase(id="dakinfiev", username="dakinfiev"),
+            UserBase(id="Jon", username="Jon"),
         ]
         return users
 
@@ -21,18 +22,16 @@ class UserService:
         # Если id найден, то возвращать класс
         return next((user for user in self.users_db if user.username == user_name), None)
 
+    def get_user(self, user_id: str) -> UserBase:
 
-        """ else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") """
-
-
-    async def check_user(self, user_check: UserRequest) -> bool:
-
-        user = self.get_user_by_id(user_check.username)
+        user = self.get_user_by_id(user_id)
         if user == None:
-            user = self.create_user(user_check)
-            create_folder_structure(user.name)
-        return True
+            user = self.create_user(user_id)
+            create_folder_structure(user_id)
+        return user
     
-
+    def create_user(self, user_id: str) -> UserBase:
+        user = UserBase(id=user_id, username=user_id)
+        self.users_db.append(user)
+        return user
         

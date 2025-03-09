@@ -8,11 +8,11 @@ class pvid_default:
         self.user_name = user_name
     def put_vector_in_db(self):
 
-        import io_file_operation
+        from app.services.file_service import return_user_folder
         import os
         from langchain_chroma import Chroma
 
-        user_folder_path = io_file_operation.return_user_folder(self.user_name)
+        user_folder_path = return_user_folder(self.user_name)
         if not os.path.exists(user_folder_path):
             return False
         

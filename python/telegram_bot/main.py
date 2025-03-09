@@ -27,25 +27,5 @@ async def process_request(data: SimpleRequest):
     )
     #bot.send_message(chatID, data.answer)
     #return {"error": "Некорректный JSON", "received_data": data}
-    """  try:
-        print (data)
-        # Проверяем, есть ли в JSON нужные ключи
-        if "code_uid" in data and "request" in data:
-            code_uid = data["code_uid"]
-            if all(k in code_uid for k in ["username", "program_uid", "request_uid"]):
-                await asyncio.sleep(2)  # Ожидание 2 секунды
-                return {
-                    "code_uid": code_uid,
-                    "answer": "ОК"
-                }
-        
-        # Если данные не соответствуют ожидаемой структуре
-        await asyncio.sleep(2)
-        return {"error": "Некорректный JSON", "received_data": data}
-    
-    except Exception as e:
-        await asyncio.sleep(2)
-        print (e)
-        return {"error": "Ошибка обработки", "details": str(e)}
- """
+
 

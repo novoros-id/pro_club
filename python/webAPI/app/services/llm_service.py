@@ -1,13 +1,15 @@
 from fastapi import HTTPException, status
 from typing import Any
-from app.models import Question, QuestionPublic
+from app.models import UserBase, SimpleRequest
+from app.utils.io_db import DbHelper
 
 class LLMService:
-    async def get_answer_service(self, question: Question) -> Any:
-        if question.user_id == "1":
-            return QuestionPublic(user_id=question.user_id, answer="bla bla bla")
-        else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    async def get_answer_service(self, request: SimpleRequest, user: UserBase) -> Any:
+        db_helper = DbHelper(user)
+        answer = db_helper.get_answer(prompt=request.request)
+        return answer
 
-    async def get_free_answer_service(self, question: Question) -> Any:
-        return {"answer": "test get_free_answer"}
+    async def get_free_answer_service(self, request: SimpleRequest, user: UserBase) -> Any:
+        db_helper = DbHelper(user)
+        answer = db_helper.get_free_answer(prompt=request.request)
+        return answer

@@ -7,13 +7,13 @@ import app.utils.io_universal as io_universal
 #import app.utils.io_db as io_db
 from app.config import settings
 
-from app.models import SimpleRequest
+from app.models import UserBase
 
 #class FileService:
 
-def create_folder_structure(user_name):
+def create_folder_structure(user: UserBase):
     # Путь к папке пользователя
-    user_folder_path = return_user_folder(user_name)
+    user_folder_path = return_user_folder(user)
     #print(user_folder_path)
     
     # Создаем основную папку
@@ -27,25 +27,25 @@ def create_folder_structure(user_name):
         if not os.path.exists(subfolder_path):
             os.makedirs(subfolder_path)
 
-def return_user_folder(user_name):
-    user_folder_name = io_universal.sanitize_filename(user_name)
+def return_user_folder(user: UserBase):
+    user_folder_name = io_universal.sanitize_filename(user.username)
     main_folder_path = settings.MAIN_FOLDER_PATH
     return (os.path.join(main_folder_path, user_folder_name))
 
-def return_user_folder_pdf(user_name):
-    user_folder_path = return_user_folder(user_name)
+def return_user_folder_pdf(user: UserBase):
+    user_folder_path = return_user_folder(user)
     return (os.path.join(user_folder_path, "pdf"))
 
-def return_user_folder_input(user_name):
-    user_folder_path = return_user_folder(user_name)
+def return_user_folder_input(user: UserBase):
+    user_folder_path = return_user_folder(user)
     return (os.path.join(user_folder_path, "input"))
 
-def return_user_folder_db(user_name):
-    user_folder_path = return_user_folder(user_name)
+def return_user_folder_db(user: UserBase):
+    user_folder_path = return_user_folder(user)
     return (os.path.join(user_folder_path, "db"))
 
-def get_list_user_files(username: str) -> str:
-    input_user_files = return_user_folder_input(username)
+def get_list_user_files(user: UserBase) -> str:
+    input_user_files = return_user_folder_input(user)
     files = os.listdir(input_user_files)
     result = '\n'.join(files)
     if result == "":
@@ -79,11 +79,11 @@ def file_is_word(file_path):
         #print('Файл не имеет расширения Doc.')
         return False 
 
-def delete_all_files(user_name):
-    input_user_files = return_user_folder_input(user_name)
+def delete_all_files(user: UserBase):
+    input_user_files = return_user_folder_input(user)
     delete_all_files_in_folder(input_user_files)
 
-    pdf_user_files = return_user_folder_pdf(user_name)
+    pdf_user_files = return_user_folder_pdf(user)
     copy_files_to_zakroma(pdf_user_files)
     delete_all_files_in_folder(pdf_user_files)
 
@@ -126,14 +126,15 @@ def return_zakroma_folder():
         os.makedirs(subfolder_path)
     return subfolder_path
 
-""" def process_files(user_name):
-    copy_user_files_from_input(user_name)
-    db_helper = io_db.DbHelper(user_name)
-    db_helper.processing_user_files() """
+def process_files(user: UserBase):
+    return copy_user_files_from_input(user)
 
-def copy_user_files_from_input(user_name):
-    user_folder_input = return_user_folder_input(user_name)
-    user_folder_pdf = return_user_folder_pdf(user_name)
+
+def copy_user_files_from_input(user: UserBase) -> Any:
+    result: dict = {"result": True, "files": [], "mesaage": []}
+
+    user_folder_input = return_user_folder_input(user)
+    user_folder_pdf = return_user_folder_pdf(user)
 
     files = os.listdir(user_folder_input)
     
@@ -146,10 +147,13 @@ def copy_user_files_from_input(user_name):
                 # Перемещаем файл
                 shutil.copy(source_file_path, destination_file_path)
                 print(f"Файл {file} успешно скопирован.")
+                result["files"].append(file)
             except Exception as e:
                 print(f"Ошибка при копировании файла {file}: {e}")
+                result["result"] = False
+                result["mesaage"].append(f"Ошибка при копировании файла {file}: {e}")
         else:
-            pass
-            #todo: Нужно вернуть ответ 
-            #io_send_telegram.send_telegram_message(chat_id, "Обрабатываются только файлы в формате docx и pdf файл " + file + " не может быть обработан" )
-
+            result["result"] = False
+            result["mesaage"].append(f"Обрабатываются только файлы в формате docx и pdf файл " + file + " не может быть обработан")
+             
+    return result
