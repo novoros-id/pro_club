@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from app.models import SimpleRequest, UserBase
 from app.services.llm_service import LLMService
-from app.utils.response import send_request, create_simple_response_from_request
+import app.utils.response as response_utils
 
 from app.deps import CurrentUser
 
@@ -14,14 +14,11 @@ async def read_root():
     return {"message": "root llm"} 
 
 @router.post("/answer")
-async def get_answer(request: SimpleRequest, user: CurrentUser):
-    answer = await llm_service.get_answer_service(request, user)
-    simple_response = create_simple_response_from_request(request, answer)
-    response = await send_request(simple_response, "get_answer_service")
-
+async def get_answer(request: SimpleRequest, user: CurrentUser, background_tasks: BackgroundTasks):
+    background_tasks.add_task(llm_service.get_answer_service, request, user)
+    return status.HTTP_200_OK
 
 @router.post("/free_answer")
-async def get_free_answer(request: SimpleRequest, user: CurrentUser):
-    answer = await llm_service.get_free_answer_service(request, user)
-    simple_response = create_simple_response_from_request(request, answer)
-    response = await send_request(simple_response, "get_free_answer_service")
+async def get_free_answer(request: SimpleRequest, user: CurrentUser, background_tasks: BackgroundTasks):
+    background_tasks.add_task(llm_service.get_free_answer_service, request, user)
+    return status.HTTP_200_OK

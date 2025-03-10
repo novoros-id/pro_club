@@ -11,7 +11,7 @@ import app.utils.llm_implementation.io_put_vector_in_db as io_put_vector_in_db
 import app.utils.llm_implementation.io_get_vectror_db as io_get_vectror_db
 import app.utils.llm_implementation.io_search_from_db as io_search_from_db
 import app.utils.llm_implementation.io_promt as io_promt
-from app.services.file_service import return_user_folder, copy_user_files_from_input
+import app.utils.io_file_operation as io_file_operation
 
 from app.config import settings_llm, settings
 
@@ -54,10 +54,10 @@ class DbHelper:
         self.user_name = user_name
         self.default_model= default_model
         
-    def process_files(self, user_name):
+    """def process_files(self, user_name):
         copy_user_files_from_input(user_name)
-        #db_helper = io_db.DbHelper(user_name)
-        self.processing_user_files()
+        db_helper = io_db.DbHelper(user_name)
+        self.processing_user_files() """
 
     def processing_user_files(self, processing_all_files: Optional[bool]=False):
 
@@ -87,7 +87,7 @@ class DbHelper:
         self.save_to_configLLM_file(configLLM_object)
 
     def get_configLLM_file(self):
-        user_folder_path = return_user_folder(self.user_name)
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
         configLLM_full_path = os.path.join(user_folder_path, 'configLLM.json')
         configLLM_object = ConfigLLM()
         if not os.path.exists(configLLM_full_path):
@@ -102,7 +102,7 @@ class DbHelper:
         return configLLM_object
         
     def save_to_configLLM_file(self, configLLM_object: ConfigLLM):
-        user_folder_path = return_user_folder(self.user_name)
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
         configLLM_full_path = os.path.join(user_folder_path, 'configLLM.json')
         if not os.path.exists(configLLM_full_path):
             return
@@ -118,7 +118,7 @@ class DbHelper:
         self.delete_proocessed_files_in_config()
 
     def delete_proocessed_files_in_config(self):
-        user_folder_path = return_user_folder(self.user_name)
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
         configLLM_full_path = os.path.join(user_folder_path, 'configLLM.json')
         configLLM_object = ConfigLLM()
         if os.path.exists(configLLM_full_path):
@@ -129,7 +129,7 @@ class DbHelper:
 
     def get_all_user_files(self):
 
-        user_folder_path = return_user_folder(self.user_name)
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
         if not os.path.exists(user_folder_path):
             return []
         

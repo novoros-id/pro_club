@@ -1,10 +1,15 @@
 import uuid
 from pydantic import BaseModel
 
-class AnyRequestBase(BaseModel):
+
+class CodeUID(BaseModel):
     username: str
     program_uid: str
     request_uid: str
+
+class AnyRequestBase(BaseModel):
+    code_uid: CodeUID
+    
 class SimpleRequest(AnyRequestBase):
     request : str | None = None
 

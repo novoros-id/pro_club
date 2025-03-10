@@ -5,7 +5,7 @@ from app.config import settings
 
 async def send_request(response_data: SimpleResponse, request_name: str) -> httpx.Response:
 
-    url = get_url_root(response_data.program_uid)
+    url = get_url_root(response_data.code_uid.program_uid)
     endpoint = get_endpoint("process")
     url += endpoint
 

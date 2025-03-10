@@ -1,5 +1,6 @@
-from fastapi import HTTPException, status
-from app.services.file_service import create_folder_structure
+import app.utils.io_file_operation as io_file_operation
+from app.config import settings
+import os
 
 from app.models import UserBase
 
@@ -11,10 +12,20 @@ class UserService:
     # Функия имитирующая БД
     # todo: переделать
     def get_users_db(self) -> dict:
-        users = [
+        users = []
+        main_folder_path = settings.MAIN_FOLDER_PATH
+
+        # Получаем все папки в каталоге MAIN_FOLDER_PATH
+        for folder_name in os.listdir(main_folder_path):
+            folder_path = os.path.join(main_folder_path, folder_name)
+            if os.path.isdir(folder_path):
+                # Создаем объект UserBase для каждой папки
+                user_id = folder_name #todo: пока ID пользователя этоя имя папки
+                users.append(UserBase(id=user_id, username=folder_name))
+        """  users = [
             UserBase(id="dakinfiev", username="dakinfiev"),
             UserBase(id="Jon", username="Jon"),
-        ]
+        ] """
         return users
 
     def get_user_by_id(self, user_name: str) -> UserBase:
@@ -27,7 +38,7 @@ class UserService:
         user = self.get_user_by_id(user_id)
         if user == None:
             user = self.create_user(user_id)
-            create_folder_structure(user_id)
+            io_file_operation.create_folder_structure(user)
         return user
     
     def create_user(self, user_id: str) -> UserBase:

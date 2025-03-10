@@ -10,9 +10,9 @@ class gvid_default:
         import os
         from langchain_huggingface import HuggingFaceEmbeddings
         from langchain_chroma import Chroma
-        from app.services.file_service import return_user_folder
+        import app.utils.io_file_operation as io_file_operation
 
-        user_folder_path = return_user_folder(self.user_name)
+        user_folder_path = io_file_operation.return_user_folder(self.user_name)
         if not os.path.exists(user_folder_path):
             return False
         

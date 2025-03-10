@@ -7,6 +7,6 @@ user_service = UserService()
 
 def get_user(request: SimpleRequest) -> UserBase:
 
-    return user_service.get_user(request.username)
+    return user_service.get_user(request.code_uid.username)
 
 CurrentUser = Annotated[UserBase, Depends(get_user)]

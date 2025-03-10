@@ -5,27 +5,27 @@ from pydantic import BaseModel
 import telebot
 from config import settings
 
-
-class SimpleRequest(BaseModel):
+class CodeUID(BaseModel):
     username: str
     program_uid: str
     request_uid: str
-    answer: str | None = None
+
+class SimpleRequest(BaseModel):
+    answer : str | None = None
 
 app = FastAPI()
-
-""" bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
-chatID = settings.TELEGRAM_CHAT_ID """
+bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
 
 
 @app.post("/process")
 async def process_request(data: SimpleRequest):
     import requests
-    response = requests.post(
-        f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage",
-        data={"chat_id": settings.TELEGRAM_CHAT_ID, "text": data.answer}
-    )
-    #bot.send_message(chatID, data.answer)
-    #return {"error": "Некорректный JSON", "received_data": data}
+
+    bot.send_message(chat_id=settings.TELEGRAM_CHAT_ID, text=data.answer)
+
+    """ response = requests.post(
+         f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage",
+        data={"chat_id": settings.TELEGRAM_CHAT_ID, "text": data.answer} 
+    ) """
 
 
