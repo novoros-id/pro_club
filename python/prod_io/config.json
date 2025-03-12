@@ -2,11 +2,11 @@
     "main_folder_path": "E:\\temp\\folder_io_project",
     "logs_folder_path": "E:\\temp\\folder_io_project",
     "task_for_test": "E:\\temp\\folder_io_project\\task_for_test",
-    "class_name_separate_file": "sf_DataProcessing",
-    "class_name_embeddings": "e_default",
+    "class_name_separate_file": "sf_DataProcessing_keywords_512_chunk_and_Tables",
+    "class_name_embeddings": "e_multilingual_e5_large",
     "class_name_put_vector_in_db": "pvid_default",
-    "class_name_get_vectror_db": "gvid_default",
-    "class_name_search": "s_default",
+    "class_name_get_vectror_db": "gvid_multilingual_e5_large",
+    "class_name_search": "s_k_five",
     "class_name_promt": "promt_default",
     "model":"llama3"
   }

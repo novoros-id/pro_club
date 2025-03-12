@@ -6,7 +6,6 @@ import os
 import shutil
 import pandas
 import datetime
-from threading import Timer
 import io_json
 import re
 import rag_metrick
