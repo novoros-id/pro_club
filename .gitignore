@@ -9,7 +9,6 @@ python/prod_io/__pycache__/io_json.cpython-312.pyc
 python/prod_io/__pycache__/io_universal.cpython-312.pyc
 python/prod_io/io_main.py
 /python/prod_io/config.py
-config.py
 .venv/pyvenv.cfg
 .venv/Lib/site-packages/distutils-precedence.pth
 .venv/Lib/site-packages/_distutils_hack/__init__.py
@@ -1356,3 +1355,5 @@ python/webAPI/app/utils/__pycache__/io_json.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/io_universal.cpython-312.pyc
 python/telegram_bot/.env
 python/telegram_bot/.env
+.venv/Lib/site-packages/setuptools/_distutils/config.py
+.venv/Lib/site-packages/setuptools/_distutils/command/config.py
