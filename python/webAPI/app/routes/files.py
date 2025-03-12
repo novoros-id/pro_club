@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Request
 import json
 from app.services.file_service import FileService
 from app.models import SimpleRequest
@@ -14,6 +14,7 @@ async def read_root():
 
 @router.post("/upload")
 async def upload_files(
+    request: Request,
     background_tasks: BackgroundTasks,
     request_form: str = Form(...), 
     files: list[UploadFile] = File(...)

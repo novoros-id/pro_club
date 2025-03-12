@@ -16,11 +16,12 @@ async def send_request(response_data: SimpleResponse, request_name: str) -> http
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, json=response_data.dict())
+        response.raise_for_status() 
         return response
 
 def get_url_root(program_uid: str) -> str:
 
-    match program_uid.upper(): 
+    match program_uid: 
         case settings.UID_PROGRAM_1C:
             return settings.URL_1C_ROOT
         case settings.UID_PROGRAM_TELEBOT:

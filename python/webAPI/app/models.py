@@ -19,21 +19,3 @@ class SimpleResponse(AnyRequestBase):
 class UserBase(BaseModel):
     id: str
     username: str
-
-
-""" class UserRequest(AnyRequestBase):
-    pass """
-
-
-""" class StatusResponse(AnyRequestBase):
-    status: str """
-
-
-""" 
-class Question(BaseModel):
-    user_id: str
-    prompt: str
-
-class QuestionPublic(BaseModel):
-    user_id: str
-    answer: str  """

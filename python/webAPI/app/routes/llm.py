@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from app.models import SimpleRequest, UserBase
 from app.services.llm_service import LLMService
-import app.utils.response as response_utils
 
 from app.deps import CurrentUser
 
