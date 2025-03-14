@@ -145,23 +145,23 @@ class sf_DataProcessing_keywords_512_chunk_and_Tables:
         loader = sfDocumentLoaderFactory.create_loader(self.file_path) 
         documents = loader.load_documents() 
 
-        # Объявляем класс
-        doc_c = get_keywords(documents)
-        # находим слова
-        # ВАЖНО! слова находятся через сеть, необходимо  установить сеть deepseek-r1:latest
-        # или заменить llm_class и llm_keywords
-        keywords = doc_c.get_keywords_def()
-        # в keywords у нас хранятся ключевые слова
-        print (keywords)
+        # # Объявляем класс
+        # doc_c = get_keywords(documents)
+        # # находим слова
+        # # ВАЖНО! слова находятся через сеть, необходимо  установить сеть deepseek-r1:latest
+        # # или заменить llm_class и llm_keywords
+        # keywords = doc_c.get_keywords_def()
+        # # в keywords у нас хранятся ключевые слова
+        # print (keywords)
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50,)
         chunks = text_splitter.split_documents(documents)
 
         # в chunk должна быть итоговый класс, мы просто добавляем в каждый чанк ключевые слова
-        enriched_chunks = [doc_c.enrich_chunk_with_additional_info(chunk, keywords) for chunk in chunks]
+        # enriched_chunks = [doc_c.enrich_chunk_with_additional_info(chunk, keywords) for chunk in chunks]
 
         # и возращаем этот чанк
-        return enriched_chunks
+        return chunks
 
 # Абстрактный базовый класс для загрузчиков документов
 class sfBaseDocumentLoader(ABC):
@@ -249,42 +249,6 @@ class sfDOCXTableExtractor:
             
 # Фабрика для обработки DOCX (извлечение текста, таблиц, изображения
 class sfDOCXLoader(sfBaseDocumentLoader):
-    # def __init__(self, file_path: str, loader_type: str):
-    #     self.file_path = file_path
-    #     self.loader_type = loader_type
-    #     self.text_extractor = sfDOCXTextExtractor(file_path)
-    #     self.table_extractor = sfDOCXTableExtractor(file_path)
-    #     # self.image_extractor = sfDOCXImageExtractor(file_path)
-
-    # def clean_text(self, text:str) -> str:
-    #     import re
-    #     text = re.sub(r'\s+',' ', text)
-    #     return text.strip()
-
-    # def load_documents(self):
-    #     documents = []
-    #     metadata = {"source": self.file_path}
-
-    #     # Извлечение текста
-    #     text = self.text_extractor.extract_text()
-    #     if text.strip():
-    #         cleaned_text = self.clean_text(text)
-    #         documents.append(LangDocument(page_content=cleaned_text, metadata=metadata))
-
-    #     # Извлечение таблиц
-    #     table_text = self.table_extractor.extract_tables()
-    #     if table_text.strip():
-    #         cleaned_table_text = self.clean_text(table_text)
-    #         documents.append(LangDocument(page_content=cleaned_table_text, metadata=metadata))
-
-    #     # # Извлечение текста из изображений
-    #     # images_text = self.image_extractor.extract_images_text()
-    #     # if images_text.strip():
-    #     #     documents.append(LangDocument(page_content=images_text))
-
-    #     return documents
-
-
     def __init__(self, file_path: str, loader_type: str):
         self.file_path = file_path
         self.loader_type = loader_type
@@ -309,27 +273,52 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         ]
         return documents
 
-#  Класс для извлечения текста и анализа страницы PDF
-class sfPDFTextExtractor:
-    def __init__(self, file_path: str):
+# Класс для загрузки PDF, объединяющий текст и таблицы
+class sfPDFLoader(sfBaseDocumentLoader):
+    def __init__(self, file_path: str, loader_type: str):
         self.file_path = file_path
+        self.loader_type = loader_type
+        self._cache = {}
+    
+    def load_documents(self):
+        import fitz
+        if self.loader_type == "py":
+            from langchain_community.document_loaders import PyPDFLoader
+            loader = PyPDFLoader(self.file_path)
+        elif self.loader_type == "unstructured":
+            from langchain_community.document_loaders import UnstructuredPDFLoader
+            loader = UnstructuredPDFLoader(self.file_path)
+        elif self.loader_type == "plumber":
+            from langchain_community.document_loaders import PDFMinerLoader
+            loader = PDFMinerLoader(self.file_path)        
+        else:
+            raise ValueError(f"Неизвестный тип загрузчика для PDF: {self.loader_type}")
+        
+        # documents = loader.load()
+        documents = []
+        pdf_document = fitz.open(self.file_path)
+        for page_num, page in enumerate(pdf_page for pdf_page in pdf_document):
+            analysis = self.analyze_page(page)
 
-    # def analyze_page(self, page):
-    #     analysis = {"contains_text": False, "contains_tables": False}
-    #     try:
-    #         page_dict = page.get_text("dict")
-    #         for block in page_dict.get("blocks", []):
-    #             if "text" in block and block["text"].strip():
-    #                 analysis["contains_text"] = True
-    #             # if "image" in block:
-    #             #     analysis["contains_images"] = True
-    #             if "lines" in block:
-    #                 # print(f"Страница {page.number + 1}: Найдено {len(block['lines'])} линий")
-    #                 analysis["contains_tables"] = True
-    #     except Exception as e:
-    #         print(f"Ошибка анализа страницы: {e}")
-    #     return analysis
+            if analysis["contains_text"]:
+                text = self.extract_text(page)
+                if text:
+                    documents.append(LangDocument(
+                        page_content=text,
+                        metadata={"source": self.file_path, "page": page_num + 1, "type": "text"}
+                    ))
 
+            elif analysis["contains_tables"]:
+                table_text, metadata = self.extract_tables(page, page_num + 1)
+                if table_text.strip():
+                    documents.append(
+                        LangDocument(
+                        page_content=table_text, 
+                        metadata={"source": self.file_path, "page": page_num + 1, "type": "table"})
+                    )
+                    
+        return documents
+    
     def analyze_page(self, page):
         analysis = {"contains_text": False, "contains_tables": False}
         try:
@@ -341,47 +330,39 @@ class sfPDFTextExtractor:
                 if text:
                     analysis["contains_text"] = True
         except Exception as e:
-            print(f"Ошибка анализа страницы: {e}")
+            print(f"Анализ страницы {page.number+1} завершился с ошибкой: {e}")
         return analysis
 
     def extract_text(self, page):
-        text = ""
+        try:
+            return page.get_text("text").strip()
+        except Exception as e:
+            print(f"Ошибка извлечения текста на странице {page.number+1}: {e}")
+            return ""
+
+    def extract_tables(self, page, page_num):
+        extracted_tables = []
+        metadata = {"source": self.file_path}
+
+        # page_num = page.number + 1
         analysis = self.analyze_page(page)
-        if analysis["contains_text"]:
-            try:
-                text = page.get_text("text").strip()
-            except Exception as e:
-                print(f"Ошибка извлечения текста: {e}")
-        # elif analysis["contains_images"]:
-        #     try:
-        #         pix = page.get_pixmap()
-        #         from PIL import Image
-        #         image = Image.open(io.BytesIO(pix.tobytes()))
-        #         import pytesseract
-        #         text = pytesseract.image_to_string(image).strip()
-        #     except Exception as e:
-        #         print(f"Ошибка OCR: {e}")
-        return text
+        if analysis["contains_tables"]:
+            table_text = self.try_extract_table(page, page_num)
+            if table_text:
+                extracted_tables.append(table_text)
+        return "\n\n".join(extracted_tables) if extracted_tables else "", metadata
+    
+    def try_extract_table(self, page, page_num):
+        import camelot
 
-# Класс для извлечения таблиц из PDF
-class sfPDFTableExtractor:
-    def __init__(self, file_path: str, text_extractor: sfPDFTextExtractor = None):
-        self.file_path = file_path
-        self.text_extrarctor = text_extractor if text_extractor is not None else sfPDFTextExtractor(path)
-        self._cache = {} # Словарь для кэширования результатов
-
-    def try_extract_table(self, page_num, page):
-        # Проверим есть ли результат в кэше
         if page_num in self._cache:
             return self._cache[page_num]
-
-        import camelot
         table_text_candidates = {}
 
         try:
             page_dict = page.get_text("dict")
             contains_lines = any("lines" in block for block in page_dict.get("blocks", []))
-            flavors = ["lattice", "stream", "hybrid"] if contains_lines else ["stream"]
+            flavors = ["stream", "hybrid"] if contains_lines else ["stream"]
 
             for flavor in flavors:
                 try:
@@ -408,53 +389,6 @@ class sfPDFTableExtractor:
             print(f"Ошибка извлечения таблиц: {e}")
             return ""
 
-    def extract_tables(self):
-        extracted_tables = []
-        metadata = {"source": self.file_path}
-
-        import fitz  # PyMuPDF
-        try:
-            doc = fitz.open(self.file_path)
-        except Exception as e:
-            print(f"Ошибка открытия PDF: {e}")
-            return ""
-        
-        for page in doc:
-            page_num = page.number + 1
-            analysis = sfPDFTextExtractor(self.file_path).analyze_page(page)
-            if analysis["contains_tables"]:
-                table_text = self.try_extract_table(page_num, page)
-                if table_text:
-                    extracted_tables.append(table_text)
-        return "\n\n".join(extracted_tables) if extracted_tables else "", metadata
-
-# Класс для загрузки PDF, объединяющий текст и таблицы
-class sfPDFLoader(sfBaseDocumentLoader):
-    def __init__(self, file_path: str, loader_type: str):
-        self.file_path = file_path
-        self.loader_type = loader_type
-        self.text_extractor = sfPDFTextExtractor(file_path)
-        self.table_extractor = sfPDFTableExtractor(file_path, text_extractor=self.text_extractor)
-
-    def load_documents(self):
-        if self.loader_type == "py":
-            from langchain_community.document_loaders import PyPDFLoader
-            loader = PyPDFLoader(self.file_path)
-        elif self.loader_type == "unstructured":
-            from langchain_community.document_loaders import UnstructuredPDFLoader
-            loader = UnstructuredPDFLoader(self.file_path)
-        elif self.loader_type == "plumber":
-            from langchain_community.document_loaders import PDFMinerLoader
-            loader = PDFMinerLoader(self.file_path)        
-        else:
-            raise ValueError(f"Неизвестный тип загрузчика для PDF: {self.loader_type}")
-        
-        documents = loader.load()
-        # Извлечение таблиц
-        tables_text, table_metadata = self.table_extractor.extract_tables()
-        if tables_text.strip():
-            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
-        return documents
 
 class get_keywords:
     
