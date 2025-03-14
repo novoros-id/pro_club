@@ -1,25 +1,31 @@
 import telebot
 import threading
 import uvicorn
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI
 from config import settings
 import request
-from models import SimpleResponse, SimpleRequest
+from models import SimpleResponse
 import asyncio
 import tempfile
 import os
 import mimetypes
 
+# Словарь для хранения пар requestId и chatId
+request_chat_map = {}
+
 app = FastAPI()
 @app.post("/process")
 async def process_request(data: SimpleResponse):
 
-    bot.send_message(chat_id=settings.TELEGRAM_CHAT_ID, text=data.answer)
+    request_id = data.code_uid.request_uid
+    chat_id = request_chat_map.get(request_id)
 
-    """ response = requests.post(
-         f"https://api.telegram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage",
-        data={"chat_id": settings.TELEGRAM_CHAT_ID, "text": data.answer} 
-    ) """
+    if chat_id:
+        bot.send_message(chat_id=chat_id, text=data.answer)
+        # Удаляем пару после обработки
+        #пока убрал так как в рамках загрузки файлов используется один идентификатор загрузки и орбработки.
+        #del request_chat_map[request_id]
+
 
 HELP_BUTTON = 'Помощь'
 FILES_LIST_BUTTON = 'Загруженные файлы'
@@ -30,8 +36,6 @@ bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
 # ---= ОБРАБОТКА КОМАНД =---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    #chat_id = str(message.chat.id)
-    #username = message.from_user.username or 'Unknown_user'
     first_name = message.from_user.first_name
 
     keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -51,8 +55,6 @@ def send_welcome(message):
 
 @bot.message_handler(commands=['help'])
 def help_bot(message):
-    #chat_id = str(message.chat.id)
-    #username = message.from_user.username
     bot.send_message(message.chat.id, 
         f'Вот что я умею:\n\n'
         f'1️⃣  {FILES_LIST_BUTTON} - позволяет получить перечень загруженных файлов\n'
@@ -64,38 +66,46 @@ def help_bot(message):
 def handle_buttons(message):
     asyncio.run(handle_buttons_async(message))
 
-
 async def handle_buttons_async(message):
+
+    if message.chat.type == 'group':
+        username = message.chat.title
+    else: 
+        username = message.from_user.username
+
     text = message.text.strip()
     chatID = message.chat.id
-    username = message.from_user.username
+   
     #request_time = datetime.datetime.now()
     #input_user_files = io_file_operation.return_user_folder_input(username)
 
     if text == FILES_LIST_BUTTON:
         simpleRequest = request.prepare_request(username, text)
+        request_chat_map[simpleRequest.code_uid.request_uid] = chatID
         await request.send_request(simpleRequest, '/api/v1/files/list')
-        #io_file_operation.get_list_files(chatID, username)
 
     elif text == DELETE_FILES_BUTTON:
         simpleRequest = request.prepare_request(username, text)
+        request_chat_map[simpleRequest.code_uid.request_uid] = chatID
         await request.send_request(simpleRequest, '/api/v1/files/delete')
-        #io_file_operation.delete_all_files(chatID, username)
 
-    """ else:
+    else:
         if not text.strip():
             response_text = (chatID, 'Извините, необходимо указать запрос!')
             bot.send_message(chatID, response_text)
 
         elif text.startswith ('$'):
             bot.send_message(chatID, 'Запрос не по текстам. Подготовка ответа может занять некоторое время...')
-            db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
-            response_text = db_helper.get_free_answer(prompt=text)
-            bot.send_message(chatID, response_text)
+            simpleRequest = request.prepare_request(username, text)
+            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            await request.send_request(simpleRequest, '/api/v1/llm/free_answer')
 
         else:
             bot.send_message (chatID, 'Запрос к загруженным текстам, это тестовый сервер и для ответа необходимо более одной минуты. Вы можете перейти к другим задачам, а когда я буду готов, то Вам придет оповещение')
-            try:
+            simpleRequest = request.prepare_request(username, text)
+            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            await request.send_request(simpleRequest, '/api/v1/llm/answer')
+            """   try:
                 db_helper = io_db.DbHelper(chat_id=chatID, user_name=username)
                 answer = db_helper.get_answer(prompt=text)
                 if answer:
@@ -126,14 +136,20 @@ async def handle_buttons_async(message):
                 response_text = 'Произошла ошибка при обработке запроса.'
                 bot.send_message(chatID, response_text)
                 print(f'Ошибка в get_answer: {e}') """
+    
 # ---= ОБРАБОТКА ДОКУМЕТОВ =---
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     asyncio.run(handle_document_async(message))
 
 async def handle_document_async(message):
-    #chatID = message.chat.id
-    username = message.from_user.username
+
+    if message.chat.type == 'group':
+        username = message.chat.title
+    else: 
+        username = message.from_user.username
+
+    chatID = message.chat.id
     file_info = bot.get_file(message.document.file_id)
     file_name = message.document.file_name
 
@@ -161,7 +177,6 @@ async def handle_document_async(message):
     else:
         dowloaded_file = bot.download_file(file_info.file_path)
         files = []
-        #temp_file_path = f"/tmp/{file_name}"
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
             temp_file.write(dowloaded_file)
             file_path = temp_file.name
@@ -172,6 +187,7 @@ async def handle_document_async(message):
                 files.append(('files', (file_name, file.read(), mime_type)))
   
         request_form = request.prepare_request(username, "")
+        request_chat_map[request_form.code_uid.request_uid] = chatID
         response = await request.send_file_request(files, request_form, '/api/v1/files/upload')
         if response.status_code == 200:
             pass

@@ -9,6 +9,7 @@ async def send_request(response_data: SimpleResponse, request_name: str) -> http
     endpoint = get_endpoint("process")
     url += endpoint
 
+
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json"

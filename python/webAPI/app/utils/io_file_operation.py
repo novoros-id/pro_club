@@ -47,10 +47,6 @@ def get_list_user_files(user: UserBase) -> str:
         return "Файлы отсутствуют"
     else:
         return result
-    """ if result == "":
-        io_send_telegram.send_telegram_message(chat_id, "Файлы отсутствуют")
-    else:
-        io_send_telegram.send_telegram_message(chat_id, result) """
 
 def file_is_pdf(file_path):
     # Получаем расширение файла

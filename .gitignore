@@ -1357,3 +1357,6 @@ python/telegram_bot/.env
 python/telegram_bot/.env
 .venv/Lib/site-packages/setuptools/_distutils/config.py
 .venv/Lib/site-packages/setuptools/_distutils/command/config.py
+python/telegram_bot/__pycache__/main.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/io_file_operation.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/response.cpython-312.pyc

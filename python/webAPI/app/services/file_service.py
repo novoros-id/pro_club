@@ -32,7 +32,7 @@ class FileService:
                 files_list.append(filename)
         files_str = ', '.join(files_list)
 
-        response_text = f"Файл(ы) '{files_str}' успешно загружен(ы)! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться."
+        response_text = f'Файл(ы) {files_str} успешно загружен(ы)! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться.'
         simple_response = response_utils.create_simple_response_from_request(request, response_text)
         response = await response_utils.send_request(simple_response, "upload")
         
@@ -42,7 +42,7 @@ class FileService:
         result_processing_files = io_file_operation.copy_user_files_from_input(user)
         db_helper = DbHelper(user)
         db_helper.processing_user_files()
-        response_text = f"Файл(ы) '{result_processing_files["files"]}' успешно обработан(ы)."
+        response_text = f'Файл(ы) {result_processing_files["files"]} успешно обработан(ы).'
         simple_response = response_utils.create_simple_response_from_request(request, response_text)
         response = await response_utils.send_request(simple_response, "upload")
 
