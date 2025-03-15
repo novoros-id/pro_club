@@ -1,5 +1,8 @@
 .DS_Store
-/python/prod_io/config_vgn.py
+python/telegram_bot/.env
+python/prod_io/config_vgn.py
+python/webAPI/app/__pycache__
+python/telegram_bot/__pycache__
 python/prod_io/io_main.py
 python/prod_io/config.json
 python/prod_io/__pycache__/
