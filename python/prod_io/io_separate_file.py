@@ -146,22 +146,22 @@ class sf_DataProcessing_keywords_512_chunk_and_Tables:
         documents = loader.load_documents() 
 
         # # Объявляем класс
-        # doc_c = get_keywords(documents)
+        doc_c = get_keywords(documents)
         # # находим слова
         # # ВАЖНО! слова находятся через сеть, необходимо  установить сеть deepseek-r1:latest
         # # или заменить llm_class и llm_keywords
-        # keywords = doc_c.get_keywords_def()
+        keywords = doc_c.get_keywords_def()
         # # в keywords у нас хранятся ключевые слова
-        # print (keywords)
+        print (keywords)
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50,)
         chunks = text_splitter.split_documents(documents)
 
         # в chunk должна быть итоговый класс, мы просто добавляем в каждый чанк ключевые слова
-        # enriched_chunks = [doc_c.enrich_chunk_with_additional_info(chunk, keywords) for chunk in chunks]
+        enriched_chunks = [doc_c.enrich_chunk_with_additional_info(chunk, keywords) for chunk in chunks]
 
         # и возращаем этот чанк
-        return chunks
+        return enriched_chunks
 
 # Абстрактный базовый класс для загрузчиков документов
 class sfBaseDocumentLoader(ABC):
@@ -278,10 +278,9 @@ class sfPDFLoader(sfBaseDocumentLoader):
     def __init__(self, file_path: str, loader_type: str):
         self.file_path = file_path
         self.loader_type = loader_type
-        self._cache = {}
     
     def load_documents(self):
-        import fitz
+        # Выбор загрузчика для файла
         if self.loader_type == "py":
             from langchain_community.document_loaders import PyPDFLoader
             loader = PyPDFLoader(self.file_path)
@@ -294,69 +293,54 @@ class sfPDFLoader(sfBaseDocumentLoader):
         else:
             raise ValueError(f"Неизвестный тип загрузчика для PDF: {self.loader_type}")
         
-        # documents = loader.load()
-        documents = []
-        pdf_document = fitz.open(self.file_path)
-        for page_num, page in enumerate(pdf_page for pdf_page in pdf_document):
-            analysis = self.analyze_page(page)
+        documents = loader.load() 
 
-            if analysis["contains_text"]:
-                text = self.extract_text(page)
-                if text:
-                    documents.append(LangDocument(
-                        page_content=text,
-                        metadata={"source": self.file_path, "page": page_num + 1, "type": "text"}
-                    ))
+        # Обновляем метаданные, чтобы source содержал только имя файла
+        file_name = os.path.basename(self.file_path)
+        for doc in documents:
+            doc.metadata["source"] = file_name
 
-            elif analysis["contains_tables"]:
-                table_text, metadata = self.extract_tables(page, page_num + 1)
-                if table_text.strip():
-                    documents.append(
-                        LangDocument(
-                        page_content=table_text, 
-                        metadata={"source": self.file_path, "page": page_num + 1, "type": "table"})
-                    )
-                    
+        # Дополнительно извлекаем таблицы
+        tables_text, table_metadata = self.extract_tables()
+        if tables_text.strip():
+            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+
         return documents
-    
+
+    def extract_tables(self):
+        extracted_tables = []
+        metadata = {"source": os.path.basename(self.file_path)}
+
+        import fitz  # PyMuPDF
+        try:
+            doc = fitz.open(self.file_path)
+        except Exception as e:
+            print(f"Ошибка открытия PDF: {e}")
+            return ""
+        
+        for page in doc:
+            page_num = page.number + 1
+            analysis = self.analyze_page(page)
+            if analysis["contains_tables"]:
+                table_text = self.try_extract_table(page, page_num)
+                if table_text:
+                    extracted_tables.append(table_text)
+        return "\n\n".join(extracted_tables) if extracted_tables else "", metadata        
+
+
     def analyze_page(self, page):
-        analysis = {"contains_text": False, "contains_tables": False}
+        # Анализируем есть ли на странице таблица
+        analysis = {"contains_tables": False}
         try:
             tables = page.find_tables()
-            if tables.tables:  # Если найдены таблицы
+            if tables.tables: 
                 analysis["contains_tables"] = True
-            else:
-                text = page.get_text("text").strip()
-                if text:
-                    analysis["contains_text"] = True
         except Exception as e:
-            print(f"Анализ страницы {page.number+1} завершился с ошибкой: {e}")
+            print(f"Анализ страницы {page} завершился с ошибкой: {e}")
         return analysis
 
-    def extract_text(self, page):
-        try:
-            return page.get_text("text").strip()
-        except Exception as e:
-            print(f"Ошибка извлечения текста на странице {page.number+1}: {e}")
-            return ""
-
-    def extract_tables(self, page, page_num):
-        extracted_tables = []
-        metadata = {"source": self.file_path}
-
-        # page_num = page.number + 1
-        analysis = self.analyze_page(page)
-        if analysis["contains_tables"]:
-            table_text = self.try_extract_table(page, page_num)
-            if table_text:
-                extracted_tables.append(table_text)
-        return "\n\n".join(extracted_tables) if extracted_tables else "", metadata
-    
     def try_extract_table(self, page, page_num):
         import camelot
-
-        if page_num in self._cache:
-            return self._cache[page_num]
         table_text_candidates = {}
 
         try:
@@ -371,7 +355,6 @@ class sfPDFLoader(sfBaseDocumentLoader):
                         quality = sum(len(table.df) for table in tables)
                         table_text = "\n".join([table.df.to_csv(index=False) for table in tables])
                         table_text_candidates[flavor] = (quality, table_text)
-                        # print(f"Flavor '{flavor}' извлек {tables.n} таблиц на странице {page_num} с качеством {quality}.")
                 except Exception as e:
                     print(f"Flavor '{flavor}' не сработал на странице {page_num}: {e}")
 
@@ -383,12 +366,10 @@ class sfPDFLoader(sfBaseDocumentLoader):
             best_flavor = max(table_text_candidates, key=lambda f: table_text_candidates[f][0])
             best_quality, best_text = table_text_candidates[best_flavor]
             print(f"Выбран режим '{best_flavor}' для страницы {page_num} с качеством {best_quality}.")
-            self._cache[page_num] = best_text
             return best_text
         except Exception as e:
             print(f"Ошибка извлечения таблиц: {e}")
             return ""
-
 
 class get_keywords:
     
