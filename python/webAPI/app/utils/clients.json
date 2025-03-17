@@ -1,0 +1,18 @@
+{
+    "12345": {
+      "program_uid": "12345",
+      "clienttype": "1C",
+      "client_login": "user1",
+      "client_pass": "pass1",
+      "url": "https://example.com",
+      "endpoint": "/api/v1/data"
+    },
+    "e23429d1-c015-4d4b-8ab5-3f0689ef9805": {
+      "program_uid": "e23429d1-c015-4d4b-8ab5-3f0689ef9805",
+      "clienttype": "telegram",
+      "client_login": "",
+      "client_pass": "",
+      "url": "http://0.0.0.0:8080",
+      "endpoint": "process"
+    }
+  }

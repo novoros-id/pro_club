@@ -17,8 +17,11 @@ app = FastAPI()
 @app.post("/process")
 async def process_request(data: SimpleResponse):
 
+    #print(len(request_chat_map))
     request_id = data.code_uid.request_uid
+    #print(request_id)
     chat_id = request_chat_map.get(request_id)
+    #print(chat_id)
 
     if chat_id:
         bot.send_message(chat_id=chat_id, text=data.answer)
@@ -137,7 +140,7 @@ async def handle_buttons_async(message):
                 bot.send_message(chatID, response_text)
                 print(f'Ошибка в get_answer: {e}') """
     
-# ---= ОБРАБОТКА ДОКУМЕТОВ =---
+# ---= ОБРАБОТКА ДОКУМЕНТОВ =---
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     asyncio.run(handle_document_async(message))
@@ -214,5 +217,8 @@ def start_fastapi():
 if __name__ == "main":
     bot_thread = threading.Thread(target=start_bot)
     bot_thread.start()
+
+    #print ("starting")
+    #start_bot()
 
     #start_fastapi()
