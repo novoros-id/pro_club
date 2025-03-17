@@ -5,6 +5,7 @@ from app.config import settings
 import json
 import threading
 import os
+import base64
 
 # Путь к файлу с JSON (замени на свой)
 JSON_FILE_PATH = "app/utils/clients.json"
@@ -17,11 +18,7 @@ _cache_lock = threading.Lock()
 async def send_request(response_data: SimpleResponse, request_name: str) -> httpx.Response:
 
     client_data = get_database_config(response_data.code_uid.program_uid)
-    #url = get_url_root_json(response_data.code_uid.program_uid)
-    #endpoint = get_endpoint_json("process")
-    #url += endpoint
     url = client_data["url"] + "/" + client_data["endpoint"]
-
 
     if client_data["clienttype"] == "telegram":
         headers = {
@@ -34,9 +31,14 @@ async def send_request(response_data: SimpleResponse, request_name: str) -> http
             response.raise_for_status() 
             return response
     else:
+
+        username = client_data["client_login"]
+        password = client_data["client_pass"]
+        credentials = f"{username}:{password}".encode("utf-8")
+        encoded_credentials = base64.b64encode(credentials).decode("utf-8")
+
         headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json"
+            "Authorization": f"Basic {encoded_credentials}"
         }
 
         async with httpx.AsyncClient() as client:
