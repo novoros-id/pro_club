@@ -60,7 +60,7 @@ class DbHelper:
         self.processing_user_files() """
 
     def processing_user_files(self, processing_all_files: Optional[bool]=False):
-
+        print("Start processing_user_files")
         configLLM_object = self.get_configLLM_file()
 
         all_pdf_file_list = self.get_all_user_files()
@@ -85,6 +85,7 @@ class DbHelper:
     
         #save configLLM
         self.save_to_configLLM_file(configLLM_object)
+        print("finish processing_user_files")
 
     def get_configLLM_file(self):
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
