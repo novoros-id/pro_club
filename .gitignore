@@ -1363,3 +1363,4 @@ python/telegram_bot/.env
 python/telegram_bot/__pycache__/main.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/io_file_operation.cpython-312.pyc
 python/webAPI/app/utils/__pycache__/response.cpython-312.pyc
+python/telegram_bot/.env
