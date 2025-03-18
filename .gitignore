@@ -1,5 +1,8 @@
 .DS_Store
-/python/prod_io/config_vgn.py
+python/telegram_bot/.env
+python/prod_io/config_vgn.py
+python/webAPI/app/__pycache__
+python/telegram_bot/__pycache__
 python/prod_io/io_main.py
 python/prod_io/config.json
 python/prod_io/__pycache__/
@@ -9,7 +12,6 @@ python/prod_io/__pycache__/io_json.cpython-312.pyc
 python/prod_io/__pycache__/io_universal.cpython-312.pyc
 python/prod_io/io_main.py
 /python/prod_io/config.py
-config.py
 .venv/pyvenv.cfg
 .venv/Lib/site-packages/distutils-precedence.pth
 .venv/Lib/site-packages/_distutils_hack/__init__.py
@@ -1338,3 +1340,29 @@ python/prod_io/__pycache__/io_db.cpython-311.pyc
 python/prod_io/__pycache__/io_file_operation.cpython-311.pyc
 python/prod_io/__pycache__/io_json.cpython-311.pyc
 python/prod_io/__pycache__/io_universal.cpython-311.pyc
+python/webAPI/__pycache__/main.cpython-312.pyc
+python/webAPI/app/__pycache__/__init__.cpython-312.pyc
+python/webAPI/app/__pycache__/config.cpython-312.pyc
+python/webAPI/app/__pycache__/main.cpython-312.pyc
+python/webAPI/app/__pycache__/models.cpython-312.pyc
+python/webAPI/app/routes/__pycache__/__init__.cpython-312.pyc
+python/webAPI/app/routes/__pycache__/files.cpython-312.pyc
+python/webAPI/app/routes/__pycache__/llm.cpython-312.pyc
+python/webAPI/app/routes/__pycache__/users.cpython-312.pyc
+python/webAPI/app/schemas/__pycache__/user_schema.cpython-312.pyc
+python/webAPI/app/services/__pycache__/file_service.cpython-312.pyc
+python/webAPI/app/services/__pycache__/llm_service.cpython-312.pyc
+python/webAPI/app/services/__pycache__/user_service.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/config.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/io_json.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/io_universal.cpython-312.pyc
+python/telegram_bot/.env
+python/telegram_bot/.env
+.venv/Lib/site-packages/setuptools/_distutils/config.py
+.venv/Lib/site-packages/setuptools/_distutils/command/config.py
+python/telegram_bot/__pycache__/main.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/io_file_operation.cpython-312.pyc
+python/webAPI/app/utils/__pycache__/response.cpython-312.pyc
+python/telegram_bot/.env
+python/webAPI/ pipeline/config.py
+python/telegram_bot/.env
