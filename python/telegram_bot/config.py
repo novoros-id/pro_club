@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     TELEGRAM_TOKEN: str
+    TELEGRAM_USER: str
+    TELEGRAM_JUST_QUESTIONS: bool
     #TELEGRAM_CHAT_ID: str
     API_URL: str
     PROGRAM_UID: str
