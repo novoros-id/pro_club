@@ -177,47 +177,6 @@ class sfFileTypeDetector:
         _, ext = os.path.splitext(file_path)
         return ext.lower()
 
-# Класс для извлеченя текста из DOCX, включая списки, заголовки и обычные абзацы
-class sfDOCXTextExtractor:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-    
-    def extract_text(self) -> str:
-        from docx import Document as DocxDocument
-        try:
-            doc = DocxDocument(self.file_path)
-            text_data = []
-            for para in doc.paragraphs:
-                if para.style.name.startswith("Heading"): # Сохранение загаловков
-                    text_data.append(f"\n**{para.text.strip()}**")
-                else:
-                    text_data.append(para.text.strip())
-            return "\n".join(text_data)
-        except Exception as e:
-            print(f"Ошибка извлечения текста: {e}")
-            return ""
-
-# Класс для извлечения таблиц из DOCX
-class sfDOCXTableExtractor:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-
-    def extract_tables(self) -> str:
-        from docx import Document as DocxDocument
-        try:
-            doc = DocxDocument(self.file_path)
-            tables_text = []
-            for table in doc.tables:
-                rows = []
-                for row in table.rows:
-                    cells = [cell.text.strip() for cell in row.cells]
-                    rows.append("\t".join(cells))
-                tables_text.append("\n".join(rows))
-            return "\n\n".join(tables_text)
-        except Exception as e:
-            print(f"Ошибка извлечения таблиц: {e}")
-            return ""
-
 # # Класс для извлечения изображений из DOCX и применения OCR        
 # class sfDOCXImageExtractor:
 #     def __init__(self, file_path: str):
@@ -259,19 +218,57 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         return text.strip()
 
     def load_documents(self):
-        from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-        from langchain.docstore.document import Document as LangDocument
+        if self.loader_type == "unstructured":
+            from  langchain_community.document_loaders import UnstructuredWordDocumentLoader
+            loader = UnstructuredWordDocumentLoader(self.file_path)
+        elif self.loader_type == "Docx2txtLoader":
+            from langchain_community.document_loaders import Docx2txtLoader
+            loader = Docx2txtLoader(self.file_path)
+        else:
+            raise ValueError(f"Неизвестный тип загрузчика для DOCX: {self.loader_type}")
+        
+        documents = loader.load()
 
-        # Используем UnstructuredWordDocumentLoader для загрузки текста из .docx
-        loader = UnstructuredWordDocumentLoader(self.file_path)
-        raw_documents = loader.load()
+        # Очищаем документ
+        for doc in documents:
+            doc.page_content = self.clean_text(doc.page_content)
 
-        # Преобразуем в LangDocument
-        documents = [
-            LangDocument(page_content=doc.page_content, metadata={"source": self.file_path})
-            for doc in raw_documents
-        ]
+        # Обновляем метаданные, чтобы source содержал только имя файла
+        file_name = os.path.basename(self.file_path)
+        for doc in documents:
+            doc.metadata["source"] = file_name
+
+        # Дополнительно извлекаем таблицы
+        tables_text, table_metadata = self.extract_tables()
+        if tables_text.strip():
+            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+
         return documents
+    
+    def extract_tables(self):
+        from docx import Document as DocxDocument
+        extracted_tables = []
+        doc = DocxDocument(self.file_path)
+        try:
+            for table in doc.tables:
+                rows = []
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    rows.append("\t".join(cells))
+                table_text = "\n".join(rows)
+                if table_text.strip():
+                    extracted_tables.append(table_text)
+        except Exception as e:
+            print(f"Ошибка извлечения таблиц: {e}")
+
+        if extracted_tables:
+            tables_text = "\n\n".join(extracted_tables)
+        else:
+            tables_text = ""
+        table_metadata = {"source": os.path.basename(self.file_path)}
+        return tables_text, table_metadata
+
+
 
 # Класс для загрузки PDF, объединяющий текст и таблицы
 class sfPDFLoader(sfBaseDocumentLoader):
@@ -568,7 +565,7 @@ class sfDocumentLoaderFactory:
         if ext == ".pdf":
             return sfPDFLoader(file_path, loader_type="py")
         elif ext == ".docx":
-            return sfDOCXLoader(file_path, loader_type="python-docx")
+            return sfDOCXLoader(file_path, loader_type="Docx2txtLoader")
         else:
             raise ValueError(f"Неподдерживаемый формат файла: {ext}")
 
