@@ -73,6 +73,7 @@ class DbHelper:
         for file_item in pdf_files_list:
             separate_text = self.separate_file(file_item)
             embedding = self.get_embeddings()
+            print ("начинаю помещение в вектор " + file_item + " для " + self.user_name)
             self.put_vector_in_db(separate_text, embedding)
             #check file as processed
             configLLM_object.processed_files.append(Processed_Files(name=file_item))
@@ -139,6 +140,7 @@ class DbHelper:
     def separate_file(self, file_path):
 
         class_name_separate_file = io_json.get_config_value("class_name_separate_file")
+        print("Для class_name_separate_file использую настройку " + class_name_separate_file)
         separate_class = getattr(io_separate_file, class_name_separate_file)
         separate_object = separate_class(file_path)
         return separate_object.separate_file()
@@ -146,6 +148,7 @@ class DbHelper:
     def get_embeddings(self):
 
         class_name_embedings = io_json.get_config_value("class_name_embeddings")
+        print("Для class_name_embedings использую настройку " + class_name_embedings)
         embedings_class = getattr(io_embeddings, class_name_embedings)
         embedings_object = embedings_class()
         return embedings_object.get_embeddings()
@@ -153,6 +156,7 @@ class DbHelper:
     def put_vector_in_db(self, separate_text, embedding):
 
         class_name_pvidb = io_json.get_config_value("class_name_put_vector_in_db")
+        print ("буду обрабатыват класс " + class_name_pvidb + " для " + self.user_name)
         pvidb_class = getattr(io_put_vector_in_db, class_name_pvidb)
         pvid_object = pvidb_class(separate_text, embedding, self.user_name)
         return pvid_object.put_vector_in_db()
@@ -160,6 +164,7 @@ class DbHelper:
     def get_vectror_db(self):
 
         class_name_gvidb = io_json.get_config_value("class_name_get_vectror_db")
+        print("Для class_name_gvidb использую настройку " + class_name_gvidb)
         gvidb_class = getattr(io_get_vectror_db, class_name_gvidb)
         gvid_object = gvidb_class(self.user_name)
         return gvid_object.get_vectror_db() 

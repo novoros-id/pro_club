@@ -158,7 +158,6 @@ class DbHelper:
         return embedings_object.get_embeddings()
 
     def put_vector_in_db(self, separate_text, embedding):
-
         class_name_pvidb = settings_llm.CLASS_NAME_PUT_VECTOR_IN_DB
         pvidb_class = getattr(io_put_vector_in_db, class_name_pvidb)
         pvid_object = pvidb_class(separate_text, embedding, self.user_name)

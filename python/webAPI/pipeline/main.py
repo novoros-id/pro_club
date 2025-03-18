@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import config
+import config_ as config
 import telebot
 import io_file_operation
 import io_db
@@ -13,7 +13,6 @@ from threading import Timer
 import io_json
 import re
 import rag_metrick
-
 
 
 # ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
@@ -672,7 +671,7 @@ def handle_document(message):
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Сохраняем временный файл
-        temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
+        temp_file_path = f"{file_name}"
         with open(temp_file_path, 'wb') as new_file:
             new_file.write(downloaded_file)
         
@@ -693,6 +692,7 @@ def handle_document(message):
             new_file.write(dowloaded_file)
 
         bot.send_message(chatID, f"Файл '{file_name}' успешно загружен! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться")
+        print("начинаю загрузку файлов для " + username)
         io_file_operation.process_files(chatID, username)
         bot.send_message(chatID, f"Файл '{file_name}' успешно обработан")
 

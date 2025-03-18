@@ -1,4 +1,4 @@
-import config
+import config_ as config
 import telebot
 
 bot = telebot.TeleBot(config.bot_token)

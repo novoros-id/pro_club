@@ -6,11 +6,24 @@ class gvid_default:
         self.user_name = user_name
     def get_vectror_db(self):
 
-        import app.services.file_service as file_service
+        #import app.services.file_service as file_service
         import os
         from langchain_huggingface import HuggingFaceEmbeddings
         from langchain_chroma import Chroma
-        import app.utils.io_file_operation as io_file_operation
+
+        # временно для запуска конвейра
+        import importlib
+
+        print("Тип self.user_name")
+        print(type(self.user_name))
+
+        if isinstance(self.user_name, str):
+            module_name = "pipeline.io_file_operation"
+        else:
+            module_name = "app.utils.io_file_operation"
+        
+        io_file_operation = importlib.import_module(module_name)
+        # временно для запуска конвейра
 
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
         if not os.path.exists(user_folder_path):
@@ -35,11 +48,24 @@ class gvid_multilingual_e5_large:
     def get_vectror_db(self):
 
         print ("start gvid_multilingual_e5_large")
-        import app.services.file_service as file_service
+        #import app.services.file_service as file_service
         import os
         from langchain_huggingface import HuggingFaceEmbeddings
         from langchain_chroma import Chroma
-        import app.utils.io_file_operation as io_file_operation
+
+        # временно для запуска конвейра
+        import importlib
+
+        print("Тип self.user_name")
+        print(type(self.user_name))
+
+        if isinstance(self.user_name, str):
+            module_name = "pipeline.io_file_operation"
+        else:
+            module_name = "app.utils.io_file_operation"
+        
+        io_file_operation = importlib.import_module(module_name)
+        # временно для запуска конвейра
 
         user_folder_path = io_file_operation.return_user_folder(self.user_name)
         print ("gvid_multilingual_e5_large user_folder_path: " + user_folder_path)

@@ -1,6 +1,6 @@
 import json
 import os
-import config
+import config_ as config
 
 def get_config_value(key):
 

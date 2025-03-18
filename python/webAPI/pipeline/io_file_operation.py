@@ -20,6 +20,7 @@ def create_user(chat_id, user_name):
 
 def process_files(chat_id, user_name):
     copy_user_files_from_input(chat_id, user_name)
+    print ("Создаю объект DbHelper " + user_name)
     db_helper = io_db.DbHelper(chat_id, user_name)
     db_helper.processing_user_files()
     #io_send_telegram.send_telegram_message(chat_id, "Файлы обработаны, можно задавать вопросы")
