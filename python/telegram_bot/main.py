@@ -71,7 +71,9 @@ def handle_buttons(message):
 
 async def handle_buttons_async(message):
 
-    if message.chat.type == 'group':
+    if settings.TELEGRAM_JUST_QUESTIONS == True:
+        username = settings.TELEGRAM_USER
+    elif message.chat.type == 'group':
         username = message.chat.title
     else: 
         username = message.from_user.username
@@ -88,9 +90,13 @@ async def handle_buttons_async(message):
         await request.send_request(simpleRequest, '/api/v1/files/list')
 
     elif text == DELETE_FILES_BUTTON:
-        simpleRequest = request.prepare_request(username, text)
-        request_chat_map[simpleRequest.code_uid.request_uid] = chatID
-        await request.send_request(simpleRequest, '/api/v1/files/delete')
+        if settings.TELEGRAM_JUST_QUESTIONS == False:
+            simpleRequest = request.prepare_request(username, text)
+            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            await request.send_request(simpleRequest, '/api/v1/files/delete')
+        else:
+            response_text =  'Извините, включен ограниченный режим, нельзя удалять файлы!'
+            bot.send_message(chatID, response_text)
 
     else:
         if not text.strip():
@@ -147,7 +153,9 @@ def handle_document(message):
 
 async def handle_document_async(message):
 
-    if message.chat.type == 'group':
+    if settings.TELEGRAM_JUST_QUESTIONS == True:
+        username = settings.TELEGRAM_USER
+    elif  message.chat.type == 'group':
         username = message.chat.title
     else: 
         username = message.from_user.username
@@ -178,26 +186,30 @@ async def handle_document_async(message):
         # Обновляем файл 
         update_prime_file(temp_file_path, chatID) """
     else:
-        dowloaded_file = bot.download_file(file_info.file_path)
-        files = []
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
-            temp_file.write(dowloaded_file)
-            file_path = temp_file.name
-            mime_type, _ = mimetypes.guess_type(file_path)
-            if mime_type is None:
-                mime_type = 'application/octet-stream'  # Default MIME type if unknown
-            with open(file_path, 'rb') as file:
-                files.append(('files', (file_name, file.read(), mime_type)))
-  
-        request_form = request.prepare_request(username, "")
-        request_chat_map[request_form.code_uid.request_uid] = chatID
-        response = await request.send_file_request(files, request_form, '/api/v1/files/upload')
-        if response.status_code == 200:
-            pass
-        else:
-            bot.send_message(message.chat.id, f"Ошибка при загрузке файла '{file_name}': {response.text}")
+        if settings.TELEGRAM_JUST_QUESTIONS == False:
+            dowloaded_file = bot.download_file(file_info.file_path)
+            files = []
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+                temp_file.write(dowloaded_file)
+                file_path = temp_file.name
+                mime_type, _ = mimetypes.guess_type(file_path)
+                if mime_type is None:
+                    mime_type = 'application/octet-stream'  # Default MIME type if unknown
+                with open(file_path, 'rb') as file:
+                    files.append(('files', (file_name, file.read(), mime_type)))
+    
+            request_form = request.prepare_request(username, "")
+            request_chat_map[request_form.code_uid.request_uid] = chatID
+            response = await request.send_file_request(files, request_form, '/api/v1/files/upload')
+            if response.status_code == 200:
+                pass
+            else:
+                bot.send_message(message.chat.id, f"Ошибка при загрузке файла '{file_name}': {response.text}")
 
-        os.remove(file_path)
+            os.remove(file_path)
+        else:
+            response_text = "Извините, включен ограниченный режим, нельзя добавлять файлы!"
+            bot.send_message(chatID, response_text)
 
 
 def start_bot():
