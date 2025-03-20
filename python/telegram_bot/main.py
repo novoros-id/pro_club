@@ -88,7 +88,12 @@ async def handle_buttons_async(message):
         simpleRequest = request.prepare_request(username, text)
         request_chat_map[simpleRequest.code_uid.request_uid] = chatID
         await request.send_request(simpleRequest, '/api/v1/files/list')
-
+    elif text == HELP_BUTTON:
+        bot.send_message(message.chat.id, 
+            f'Вот что я умею:\n\n'
+            f'1️⃣  {FILES_LIST_BUTTON} - позволяет получить перечень загруженных файлов\n'
+            f'2️⃣  {DELETE_FILES_BUTTON} - выполняет полное удаление всех загруженных ранее файлов'
+        )
     elif text == DELETE_FILES_BUTTON:
         if settings.TELEGRAM_JUST_QUESTIONS == False:
             simpleRequest = request.prepare_request(username, text)
