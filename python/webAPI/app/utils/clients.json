@@ -1,7 +1,7 @@
 {
     "6a09f20a-8de6-11e1-b3e1-001617ec3f2a": {
       "program_uid": "6a09f20a-8de6-11e1-b3e1-001617ec3f2a",
-      "clienttype": "1C",
+      "clienttype": "OneC",
       "client_login": "Администратор",
       "client_pass": "",
       "url": "http://10.254.172.18:446/1C_CPM_NIOKR_AVAGANOV_DEV/hs/proai",
