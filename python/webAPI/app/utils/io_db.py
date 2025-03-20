@@ -59,22 +59,35 @@ class DbHelper:
         db_helper = io_db.DbHelper(user_name)
         self.processing_user_files() """
 
-    def processing_user_files(self, processing_all_files: Optional[bool]=False):
+    def processing_user_files(self, processing_all_files: Optional[bool]=False, saved_files = []):
         print("Start processing_user_files")
+        print ("файлов для обработки")
+        print(len(saved_files))
         configLLM_object = self.get_configLLM_file()
 
         all_pdf_file_list = self.get_all_user_files()
         if processing_all_files:
             pdf_files_list = all_pdf_file_list
+            files_to_update = []
             configLLM_object.processed_files.clear
         else:
             # get differents between all user files and processed files
             set_difference = set(all_pdf_file_list) - set([file.name for file in configLLM_object.processed_files])
             pdf_files_list = list(set_difference)
 
-        if len(pdf_files_list) == 0:
+            # Если файлы были добавлены ранее, то добавим в словарь повторной загрузки
+            user_folder_path = io_file_operation.return_user_folder(self.user_name)
+            user_folder_path = os.path.join(user_folder_path, 'pdf') 
+            files_to_update = list(map(lambda file: os.path.join(user_folder_path, file), saved_files))
+            print ("файлов для обновления")
+            print(len(files_to_update))
+
+        if len(pdf_files_list) == 0 and len(files_to_update) == 0:
             #todo show user error
             return
+        
+        self.clear_files_in_db(files_to_update)
+        pdf_files_list = pdf_files_list + files_to_update
         
         for file_item in pdf_files_list:
             separate_text = self.separate_file(file_item)
@@ -162,6 +175,18 @@ class DbHelper:
         pvidb_class = getattr(io_put_vector_in_db, class_name_pvidb)
         pvid_object = pvidb_class(separate_text, embedding, self.user_name)
         return pvid_object.put_vector_in_db()
+    
+    def clear_files_in_db(self, files_to_update):
+        for files in files_to_update:
+            print("Обновляю файл")
+            print(files)
+            vector_db = self.get_vectror_db()
+            print("ищу данные в базе")
+            docs_to_delete = vector_db.get(where={"source": files})
+            for doc_id, metadata in zip(docs_to_delete["ids"], docs_to_delete["metadatas"]):
+                print(f"ID: {doc_id}, Metadata: {metadata}")
+                vector_db.delete(ids=doc_id)
+            print("Документы успешно удалены!")
 
     def get_vectror_db(self):
 

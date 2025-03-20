@@ -16,8 +16,8 @@ class FileService:
                                      files: list, 
                                      request: SimpleRequest,
                                      background_tasks: BackgroundTasks) -> Any:
-        await self.save_user_files(user, files, request)
-        background_tasks.add_task(self.process_user_files, user, request)
+        saved_files = await self.save_user_files(user, files, request)
+        background_tasks.add_task(self.process_user_files, user, request, saved_files)
 
     async def save_user_files(self, 
                               user: UserBase, 
@@ -35,13 +35,16 @@ class FileService:
         response_text = f'Файл(ы) {files_str} успешно загружен(ы)! Начинаю обработку файла.\nВ зависимости от размера файла время обработки может увеличиваться.'
         simple_response = response_utils.create_simple_response_from_request(request, response_text)
         response = await response_utils.send_request(simple_response, "upload")
+
+        return files_list  # Возвращаем список имен файлов
         
     async def process_user_files(self, 
                                  user: UserBase, 
-                                 request: SimpleRequest) -> Any:
+                                 request: SimpleRequest,
+                                 saved_files = []) -> Any:
         result_processing_files = io_file_operation.copy_user_files_from_input(user)
         db_helper = DbHelper(user)
-        db_helper.processing_user_files()
+        db_helper.processing_user_files(None,saved_files)
         print("finish db_helper.processing_user_files()")
         response_text = f'Файл(ы) {result_processing_files["files"]} успешно обработан(ы).'
         simple_response = response_utils.create_simple_response_from_request(request, response_text)
