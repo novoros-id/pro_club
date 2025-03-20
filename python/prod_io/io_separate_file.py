@@ -268,8 +268,6 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         table_metadata = {"source": os.path.basename(self.file_path)}
         return tables_text, table_metadata
 
-
-
 # Класс для загрузки PDF, объединяющий текст и таблицы
 class sfPDFLoader(sfBaseDocumentLoader):
     def __init__(self, file_path: str, loader_type: str):
