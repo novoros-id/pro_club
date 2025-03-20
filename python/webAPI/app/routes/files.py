@@ -48,3 +48,4 @@ async def delete_all_user_files(request: SimpleRequest,
                                 background_tasks: BackgroundTasks):
     await file_service.delete_all_user_files(request, user, background_tasks)
     return status.HTTP_200_OK
+

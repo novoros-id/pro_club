@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     MAIN_FOLDER_PATH: str
     LOGS_FOLDER_PATH: str
 
+    DB_URL: str
+
     model_config = SettingsConfigDict(env_file="app\.env",
                                       env_file_encoding='utf-8')
 
