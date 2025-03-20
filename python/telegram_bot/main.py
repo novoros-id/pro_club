@@ -16,12 +16,8 @@ request_chat_map = {}
 app = FastAPI()
 @app.post("/process")
 async def process_request(data: SimpleResponse):
-
-    #print(len(request_chat_map))
     request_id = data.code_uid.request_uid
-    #print(request_id)
     chat_id = request_chat_map.get(request_id)
-    #print(chat_id)
 
     if chat_id:
         bot.send_message(chat_id=chat_id, text=data.answer)
@@ -71,10 +67,13 @@ def handle_buttons(message):
 
 async def handle_buttons_async(message):
 
-    if settings.TELEGRAM_JUST_QUESTIONS == True:
+    if  message.chat.type != 'private':
+        me = bot.get_me()
+        username = me.username #message.chat.title
+        if message_to_the_bot(username, message.text) == False:
+            return
+    elif settings.TELEGRAM_JUST_QUESTIONS == True:
         username = settings.TELEGRAM_USER
-    elif message.chat.type == 'group':
-        username = message.chat.title
     else: 
         username = message.from_user.username
 
@@ -157,11 +156,14 @@ def handle_document(message):
     asyncio.run(handle_document_async(message))
 
 async def handle_document_async(message):
-
-    if settings.TELEGRAM_JUST_QUESTIONS == True:
+  
+    if  message.chat.type != 'private':
+        me = bot.get_me()
+        username = me.username #message.chat.title
+        if message_to_the_bot(username, message.text) == False:
+            return
+    elif settings.TELEGRAM_JUST_QUESTIONS == True:
         username = settings.TELEGRAM_USER
-    elif  message.chat.type == 'group':
-        username = message.chat.title
     else: 
         username = message.from_user.username
 
@@ -230,6 +232,14 @@ def start_bot():
 
 def start_fastapi():
     uvicorn.run(app, host="127.0.0.2", port=8000)
+
+def message_to_the_bot(bot_username, text):
+    text = text.strip().lower()
+    bot_username = bot_username.strip().lower()
+    if f"@{bot_username}" in text:
+        return True
+    else:
+        return False
 
 if __name__ == "main":
     bot_thread = threading.Thread(target=start_bot)
