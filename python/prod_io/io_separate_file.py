@@ -214,7 +214,22 @@ class sfDOCXLoader(sfBaseDocumentLoader):
 
     def clean_text(self, text:str) -> str:
         import re
-        text = re.sub(r'\s+',' ', text)
+        
+        # Удаление невидимых символов
+        invisible_chars = ['\u200b', '\ufeff', '\xa0', '\x0c']
+        for char in invisible_chars:
+            text = text.replace(char, ' ' if char == '\xa0' else '')
+
+        # Замена повторяющихся символов: -----, ===, **** и т.п.
+        text = re.sub(r'([\-=_*~#]{3,})', '', text)
+
+        # Удаление лишних пробелов с сохранением абзацев
+        # 1. сначала нормализуем пробелы внутри строк
+        text = re.sub(r'[ \t]+', ' ', text)
+        # 2. заменяем 3 и более переносов строк на 2 (абзац)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        # 3. удаляем пробелы в начале и конце строк
+        text = "\n".join([line.strip() for line in text.splitlines()])
         return text.strip()
 
     def load_documents(self):
