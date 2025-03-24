@@ -1,2 +1,2 @@
-bot_token = "7220147586:AAFCOP2u1ROzCC8uvVt-xb4iv42KGYyxo1c"
-path_config_json = "/Users/alexeyvaganov/doc/GitHub/pro_club/python/webAPI/pipeline/config.json"
+bot_token = "8090244153:AAF-_wBtTiI5Sb8US-i79bRjRUv9Cl3Jr90"
+path_config_json = "E:\\DevClub\\VS\\pro_club\\python\\webAPI\\pipeline\\config.json"

@@ -4,7 +4,6 @@ import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
 
 import os
-import io
 from abc import ABC, abstractmethod
 from langchain.docstore.document import Document as LangDocument
 
@@ -12,7 +11,6 @@ class sf_default:
     def __init__(self, file_path):
         self.file_path = file_path
     def separate_file(self):
-        import os
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_community.document_loaders import Docx2txtLoader
         from langchain.text_splitter import (
@@ -31,11 +29,11 @@ class sf_default:
 
         documents = loader.load()
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200,)
-        documents = text_splitter.split_documents(documents)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=200,)
+        documents = text_splitter.split_documents(documents)     
 
         return documents
-
+    
 class sf_DataProcessing:
     def __init__(self, file_path):
         self.file_path = file_path
@@ -52,57 +50,19 @@ class sf_DataProcessing:
             print(f"Чанк {i}: {doc.page_content[:500]}")
 
         return documents
-    
-class sf_500_100_podg:
-    def __init__(self, file_path):
-        self.file_path = file_path
-    def separate_file(self):
-        import os
-        import re 
-        from langchain_community.document_loaders import PyPDFLoader
-        from langchain_community.document_loaders import Docx2txtLoader
-        from langchain.text_splitter import (
-            RecursiveCharacterTextSplitter,
-        )
-        basename, extension = os.path.splitext(self.file_path)
 
-        match extension:
-            case ".docx":
-                loader = Docx2txtLoader(self.file_path)
-            case ".pdf":  
-                loader = PyPDFLoader(self.file_path)
-            case _:
-                print(f"Данный файл не поддерживается {self.file_path}")
-                return []
-
-        documents = loader.load()
-
-        # pages = []
-        # for doc in documents:
-        #     cleaned_document = doc.replace('\n', '')
-        #     pages.append(cleaned_document)
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100,)
-        documents = text_splitter.split_documents(documents)
-
-        return documents
-    
 class sf_add_keywords_512_chunk:
     def __init__(self, file_path):
         self.file_path = file_path
     def separate_file(self):
-        import os
-        import re 
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_community.document_loaders import Docx2txtLoader
         from langchain.text_splitter import (
             RecursiveCharacterTextSplitter,
         )
-
-        print ("start sf_add_keywords_512_chunk")
-
+    
+        # читаем документ
         basename, extension = os.path.splitext(self.file_path)
-
         match extension:
             case ".docx":
                 loader = Docx2txtLoader(self.file_path)
@@ -111,25 +71,30 @@ class sf_add_keywords_512_chunk:
             case _:
                 print(f"Данный файл не поддерживается {self.file_path}")
                 return []
-
         documents = loader.load()
 
+        # Объявляем класс
         doc_c = get_keywords(documents)
+        # находим слова
+        # ВАЖНО! слова находятся через сеть, необходимо  установить сеть deepseek-r1:latest
+        # или заменить llm_class и llm_keywords
         keywords = doc_c.get_keywords_def()
+        # в keywords у нас хранятся ключевые слова
         print (keywords)
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50,)
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=100,)
         chunks = text_splitter.split_documents(documents)
+
+        # в chunk должна быть итоговый класс, мы просто добавляем в каждый чанк ключевые слова
         enriched_chunks = [doc_c.enrich_chunk_with_additional_info(chunk, keywords) for chunk in chunks]
 
-        print ("finish sf_add_keywords_512_chunk")
+        # и возращаем этот чанк
         return enriched_chunks
 
 class sf_DataProcessing_keywords_512_chunk:
     def __init__(self, file_path):
         self.file_path = file_path
     def separate_file(self):
-        import os
-        import re 
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_community.document_loaders import Docx2txtLoader
         from langchain.text_splitter import (
@@ -187,7 +152,7 @@ class sf_DataProcessing_keywords_512_chunk_and_Tables:
         # # в keywords у нас хранятся ключевые слова
         print (keywords)
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=50,)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=100,)
         chunks = text_splitter.split_documents(documents)
 
         # в chunk должна быть итоговый класс, мы просто добавляем в каждый чанк ключевые слова
@@ -236,47 +201,6 @@ class sfFileTypeDetector:
         _, ext = os.path.splitext(file_path)
         return ext.lower()
 
-# Класс для извлеченя текста из DOCX, включая списки, заголовки и обычные абзацы
-class sfDOCXTextExtractor:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-    
-    def extract_text(self) -> str:
-        from docx import Document as DocxDocument
-        try:
-            doc = DocxDocument(self.file_path)
-            text_data = []
-            for para in doc.paragraphs:
-                if para.style.name.startswith("Heading"): # Сохранение загаловков
-                    text_data.append(f"\n**{para.text.strip()}**")
-                else:
-                    text_data.append(para.text.strip())
-            return "\n".join(text_data)
-        except Exception as e:
-            print(f"Ошибка извлечения текста: {e}")
-            return ""
-
-# Класс для извлечения таблиц из DOCX
-class sfDOCXTableExtractor:
-    def __init__(self, file_path: str):
-        self.file_path = file_path
-
-    def extract_tables(self) -> str:
-        from docx import Document as DocxDocument
-        try:
-            doc = DocxDocument(self.file_path)
-            tables_text = []
-            for table in doc.tables:
-                rows = []
-                for row in table.rows:
-                    cells = [cell.text.strip() for cell in row.cells]
-                    rows.append("\t".join(cells))
-                tables_text.append("\n".join(rows))
-            return "\n\n".join(tables_text)
-        except Exception as e:
-            print(f"Ошибка извлечения таблиц: {e}")
-            return ""
-
 # # Класс для извлечения изображений из DOCX и применения OCR        
 # class sfDOCXImageExtractor:
 #     def __init__(self, file_path: str):
@@ -314,23 +238,75 @@ class sfDOCXLoader(sfBaseDocumentLoader):
 
     def clean_text(self, text:str) -> str:
         import re
-        text = re.sub(r'\s+',' ', text)
+        
+        # Удаление невидимых символов
+        invisible_chars = ['\u200b', '\ufeff', '\xa0', '\x0c']
+        for char in invisible_chars:
+            text = text.replace(char, ' ' if char == '\xa0' else '')
+
+        # Замена повторяющихся символов: -----, ===, **** и т.п.
+        text = re.sub(r'([\-=_*~#]{3,})', '', text)
+
+        # Удаление лишних пробелов с сохранением абзацев
+        # 1. сначала нормализуем пробелы внутри строк
+        text = re.sub(r'[ \t]+', ' ', text)
+        # 2. заменяем 3 и более переносов строк на 2 (абзац)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        # 3. удаляем пробелы в начале и конце строк
+        text = "\n".join([line.strip() for line in text.splitlines()])
+
         return text.strip()
 
     def load_documents(self):
-        from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-        from langchain.docstore.document import Document as LangDocument
+        if self.loader_type == "unstructured":
+            from  langchain_community.document_loaders import UnstructuredWordDocumentLoader
+            loader = UnstructuredWordDocumentLoader(self.file_path)
+        elif self.loader_type == "Docx2txtLoader":
+            from langchain_community.document_loaders import Docx2txtLoader
+            loader = Docx2txtLoader(self.file_path)
+        else:
+            raise ValueError(f"Неизвестный тип загрузчика для DOCX: {self.loader_type}")
+        
+        documents = loader.load()
 
-        # Используем UnstructuredWordDocumentLoader для загрузки текста из .docx
-        loader = UnstructuredWordDocumentLoader(self.file_path)
-        raw_documents = loader.load()
+        # Очищаем документ
+        for doc in documents:
+            doc.page_content = self.clean_text(doc.page_content)
 
-        # Преобразуем в LangDocument
-        documents = [
-            LangDocument(page_content=doc.page_content, metadata={"source": self.file_path})
-            for doc in raw_documents
-        ]
+        # Обновляем метаданные, чтобы source содержал только имя файла
+        file_name = os.path.basename(self.file_path)
+        for doc in documents:
+            doc.metadata["source"] = file_name
+
+        # Дополнительно извлекаем таблицы
+        tables_text, table_metadata = self.extract_tables()
+        if tables_text.strip():
+            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+
         return documents
+    
+    def extract_tables(self):
+        from docx import Document as DocxDocument
+        extracted_tables = []
+        doc = DocxDocument(self.file_path)
+        try:
+            for table in doc.tables:
+                rows = []
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    rows.append("\t".join(cells))
+                table_text = "\n".join(rows)
+                if table_text.strip():
+                    extracted_tables.append(table_text)
+        except Exception as e:
+            print(f"Ошибка извлечения таблиц: {e}")
+
+        if extracted_tables:
+            tables_text = "\n\n".join(extracted_tables)
+        else:
+            tables_text = ""
+        table_metadata = {"source": os.path.basename(self.file_path)}
+        return tables_text, table_metadata
 
 # Класс для загрузки PDF, объединяющий текст и таблицы
 class sfPDFLoader(sfBaseDocumentLoader):
@@ -618,4 +594,3 @@ class get_keywords:
         """Добавляет additional_info в текст чанка, но не объединяет все метаданные"""
         enriched_content = f"{additional_text}\n\n{doc.page_content}"  # 👈 Добавляем только `additional_info`
         return LangDocument(page_content=enriched_content, metadata=doc.metadata)
-    
