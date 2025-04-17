@@ -15,13 +15,14 @@ class User(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     email:Mapped[str] = mapped_column(String, unique=True, nullable=True)
 
+
 class Program(Base):
     __tablename__ = 'programs'
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    program_id: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    type_program: Mapped[TypeProgram] = mapped_column(String, nullable=False)
+    program_uid: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=True)
+    clienttype: Mapped[TypeProgram] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=True)
 
     # Связь с ConnectionSetting
@@ -33,10 +34,11 @@ class ConnectionSetting(Base):
     __tablename__ = 'connection_settings'
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    program_id: Mapped[str] = mapped_column(String, ForeignKey("programs.program_id"), nullable=False)
+    program_uid: Mapped[str] = mapped_column(String, ForeignKey("programs.program_uid"), nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
-    username: Mapped[str] = mapped_column(String, nullable=False)
-    password: Mapped[str] = mapped_column(String, nullable=False)
+    client_login: Mapped[str] = mapped_column(String, nullable=True)
+    client_pass: Mapped[str] = mapped_column(String, nullable=True)
+    endpoint: Mapped[str] = mapped_column(String, nullable=True)
 
     # Связь с Program
     program: Mapped[Program] = relationship("Program", back_populates="connection_settings") 

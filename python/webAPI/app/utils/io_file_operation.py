@@ -1,10 +1,16 @@
 from typing import Any
 import os
 import shutil
+import json
+import threading
 import app.utils.io_universal as io_universal
 from app.config import settings
 
 from app.models import UserBase
+
+# Глобальные переменные для кэша
+_connection_settings_file_cache = None
+_cache_lock = threading.Lock()
 
 def create_folder_structure(user: UserBase):
     # Путь к папке пользователя
@@ -23,7 +29,7 @@ def create_folder_structure(user: UserBase):
             os.makedirs(subfolder_path)
 
 def return_user_folder(user: UserBase):
-    user_folder_name = io_universal.sanitize_filename(user.username)
+    user_folder_name = io_universal.sanitize_filename(user.name)
     main_folder_path = settings.MAIN_FOLDER_PATH
     return (os.path.join(main_folder_path, user_folder_name))
 
@@ -144,3 +150,28 @@ def copy_user_files_from_input(user: UserBase) -> Any:
             result["mesaage"].append(f"Обрабатываются только файлы в формате docx и pdf файл " + file + " не может быть обработан")
              
     return result
+
+def get_database_config(program_uid):
+    #Возвращает конфигурацию базы, лениво загружая JSON при первом вызове.
+    load_database_config()  # Проверяем, загружен ли кэш
+    return _connection_settings_file_cache.get(program_uid, None)
+
+def load_database_config():
+    #Загружает JSON в память, если он еще не загружен
+    global _connection_settings_file_cache
+    if _connection_settings_file_cache is None:  # Ленивая загрузка
+        with _cache_lock:
+            if _connection_settings_file_cache is None:  # Повторная проверка (чтобы исключить race condition)
+                try:
+                    with open(settings.CONNECTION_FILE_PATH, "r", encoding="utf-8") as file:
+                        _connection_settings_file_cache = json.load(file)
+                except () as e:
+                    print(f"Ошибка при загрузке JSON: {e}")
+                    _connection_settings_file_cache = {}
+
+def reload_database_config():
+    #Принудительно обновляет кэш (если JSON изменился).
+    global _connection_settings_file_cache
+    with _cache_lock:
+        _connection_settings_file_cache = None  # Сбрасываем кэш
+    load_database_config()  # Перезагружаем данн

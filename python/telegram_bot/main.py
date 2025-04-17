@@ -235,7 +235,5 @@ if __name__ == "main":
     bot_thread = threading.Thread(target=start_bot)
     bot_thread.start()
 
-    #print ("starting")
-    #start_bot()
-
-    #start_fastapi()
+#debug Нужен для ответа в дебаш чат
+request_chat_map[settings.DEBUG_REQUEST_ID] = settings.DEBUG_TELEGRAM_CHAT_ID

@@ -26,14 +26,14 @@ def init_db():
 
         # Создание записей Программ
         programs = [
-            Program(program_id="6a09f20a-8de6-11e1-b3e1-001617ec3f2a", name="1C UH", type_program=TypeProgram.OneC.value),
-            Program(program_id="e23429d1-c015-4d4b-8ab5-3f0689ef9805", name="Telegram Bot", type_program=TypeProgram.Telegram.value),
+            Program(program_uid="6a09f20a-8de6-11e1-b3e1-001617ec3f2a", name="1C UH", clienttype=TypeProgram.OneC.value),
+            Program(program_uid="e23429d1-c015-4d4b-8ab5-3f0689ef9805", name="Telegram Bot", clienttype=TypeProgram.Telegram.value),
         ]
 
         #Создание настроек подключения
         connection_settings = [
-            ConnectionSetting(program_id="6a09f20a-8de6-11e1-b3e1-001617ec3f2a",url="http://localhost:8080",username="Администратор",password=""),
-            ConnectionSetting(program_id="e23429d1-c015-4d4b-8ab5-3f0689ef9805",url="http://127.0.0.2:8000",username="",password=""),
+            ConnectionSetting(program_uid="6a09f20a-8de6-11e1-b3e1-001617ec3f2a",url="http://localhost:8080",client_login="Администратор",client_pass=""),
+            ConnectionSetting(program_uid="e23429d1-c015-4d4b-8ab5-3f0689ef9805",url="http://127.0.0.2:8000",client_login="",client_pass=""),
         ]
        
          # Добавление данных в сессию

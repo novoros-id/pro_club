@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     API_URL: str
     PROGRAM_UID: str
 
+    DEBUG_TELEGRAM_CHAT_ID: str
+    DEBUG_REQUEST_ID: str
+
     model_config = SettingsConfigDict(env_file=".env",
                                       env_file_encoding='utf-8')
 

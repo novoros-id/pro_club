@@ -12,7 +12,7 @@
       "clienttype": "telegram",
       "client_login": "",
       "client_pass": "",
-      "url": "http://0.0.0.0:8080",
+      "url": "http://127.0.0.2:8000",
       "endpoint": "process"
     }
   }

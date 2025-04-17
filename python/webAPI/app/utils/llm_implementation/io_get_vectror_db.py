@@ -81,7 +81,7 @@ class gvid_multilingual_e5_large:
         print ("gvid_multilingual_e5_large start hf_embeddings_model")
         #todo: need parametr for model_kwargs
         hf_embeddings_model = HuggingFaceEmbeddings(
-            model_name="intfloat/multilingual-e5-large", model_kwargs={"device": "cpu"})
+            model_name="intfloat/multilingual-e5-large", model_kwargs={"device": "cpu"}) #cuda
         
 
         print ("gvid_multilingual_e5_large hf_embeddings_model: ")
