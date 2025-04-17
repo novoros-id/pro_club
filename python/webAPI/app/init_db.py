@@ -33,7 +33,7 @@ def init_db():
         #Создание настроек подключения
         connection_settings = [
             ConnectionSetting(program_uid="6a09f20a-8de6-11e1-b3e1-001617ec3f2a",url="http://localhost:8080",client_login="Администратор",client_pass=""),
-            ConnectionSetting(program_uid="e23429d1-c015-4d4b-8ab5-3f0689ef9805",url="http://127.0.0.2:8000",client_login="",client_pass=""),
+            ConnectionSetting(program_uid="e23429d1-c015-4d4b-8ab5-3f0689ef9805",url="http://127.0.0.2:8000",client_login="",client_pass="", endpoint="process"),
         ]
        
          # Добавление данных в сессию

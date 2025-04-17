@@ -1379,3 +1379,4 @@ python/prod_io/__pycache__/io_json.cpython-312.pyc
 python/prod_io/__pycache__/io_universal.cpython-312.pyc
 python/webAPI/app/utils/clients.json
 python/webAPI/app/main_api.db
+python/webAPI/app/del_main_api.db
