@@ -6,7 +6,6 @@ import os
 import shutil
 import pandas
 import datetime
-from threading import Timer
 import io_json
 import re
 import rag_metrick
@@ -241,7 +240,7 @@ def handle_uploaded_file(message):
     downloaded_file = bot.download_file(file_info.file_path)
 
     # Сохраняем временный файл
-    temp_file_path = f"/tmp/{file_name}"
+    temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
     with open(temp_file_path, 'wb') as new_file:
         new_file.write(downloaded_file)
     
@@ -389,13 +388,17 @@ def simulate_upload_for_test_user(chatID):
 
 # Функция обработки команды $start_pipeline
 def handle_start_pipeline(chatID):
-    #global logs_manager
     logs_folder_path_pipeline = io_json.get_config_value('task_for_test')
     current_time = datetime.datetime.now()
     logs_file_name_pipeline = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
     logs_manager_pipeline = LogManager(logs_folder_path_pipeline, logs_file_name_pipeline)
-
+    max_telegram_message_length = 3800 # На самом деле максимально телега в одно сообщение может уместить 4096, но я уменьшил с запасом
     test_username = 'test_user_pipeline'
+
+    # Обрезает текст, если он превышает mmax_length, добавляя '...' в концу
+    def truncate_text(text, max_length=max_telegram_message_length):
+        return text if len(text) <=max_length else text[:max_length] + "..."
+
 
     try:
         #Загружаем данные из Excel
@@ -416,7 +419,7 @@ def handle_start_pipeline(chatID):
             bot.send_message(chatID, 'Вопросы из колонки "request_text" отсутствуют или не найдены')
             return
         
-# Если вопросы найдены, обработаем их
+        # Если вопросы найдены, обработаем их
         total_questions = len(test_questions)
 
         # Создание лог-файла
@@ -429,11 +432,19 @@ def handle_start_pipeline(chatID):
         # Поочередная обработка вопросов
         for idx, question in enumerate(test_questions, start=1):
 
+            # Обрезаем текст вопроса, если он слишком длинный
+            truncated_question = truncate_text(question)
+
             # Отправляем вопрос и получаем ответ
-            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {question}")
-            print(f'[DEBUG] Отправляем вопрос: {question}')
+            bot.send_message(chatID, f"Вопрос {idx} из {total_questions} отправлен от имени {test_username}. Текст вопроса: {truncated_question}")
+            print(f'[DEBUG] Отправляем вопрос: {truncated_question}')
+
+            # Получаем ответ
             response = db_helper.get_answer(prompt=question)
-            print(f'[DEBUG] Ответ содержит: {response}')
+
+            # Обрезаем ответ, если он слишком длинный
+            truncated_response = truncate_text(response)
+            print(f'[DEBUG] Ответ содержит: {truncated_response}')
 
             # Запись в лог
             logs_manager_pipeline.log_interaction(
@@ -448,7 +459,7 @@ def handle_start_pipeline(chatID):
             )
 
             # Обновляем прогресс
-            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {response} ")
+            bot.send_message(chatID, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {truncated_response} ")
 
         # Сообщаем о завершении
         bot.send_message(chatID, "Все вопросы успешно обработаны. Логи записаны.")
@@ -479,6 +490,7 @@ def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path)
         bot.send_message(chatID, f'Файл метрик: {file_metrick}')
         return file_metrick
     except:
+        file_metrick = log_file_name
         bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
         return file_metrick  
 
@@ -562,15 +574,6 @@ def handle_buttons(message):
         # 3. Запуск тест-конвейера
         handle_start_pipeline(chatID)
 
-    #elif text.startswith ('$update_prime'):
-        # Устанавливаем контекст для пользователя
-        #user_context[chatID] = 'awaiting_file'
-        #bot.send_message(chatID, 'Пожалуйста, загрузите файл prime.xlsx')
-        # Таймаут для очистки контекста 5 минут
-        #Timer(300, lambda:user_context.pop(chatID, None)).start()
-        # Вызываем обработчик загруженного файла
-        #bot.register_next_step_handler(message, handle_uploaded_file)
-
     elif re.match(r'\$(\w+)\s(.+)', text):
         try:
             match = re.match(r'\$(\w+)\s(.+)', text)
@@ -594,7 +597,7 @@ def handle_buttons(message):
         help_bot(message)
 
     elif text.startswith ('$help'):
-        bot.send_message(chatID, 'Доступные сервисные команды:\n$start_pipeline\n$update_prime\n$get_user')
+        bot.send_message(chatID, 'Доступные сервисные команды:\n$start_pipeline\n$get_user')
 
     elif text == FILES_LIST_BUTTON:
         io_file_operation.get_list_files(chatID, username)
@@ -664,7 +667,7 @@ def handle_document(message):
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Сохраняем временный файл
-        temp_file_path = f"/tmp/{file_name}"
+        temp_file_path = f"E:\\temp\\folder_io_project\\task_for_test{file_name}"
         with open(temp_file_path, 'wb') as new_file:
             new_file.write(downloaded_file)
         

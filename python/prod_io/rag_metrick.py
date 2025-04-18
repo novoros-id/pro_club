@@ -32,7 +32,9 @@ class rag_metrick:
             request_text = row["request_text"]
             response_text = row["response_text"]
             used_files = row["used_files"]
-            filtered_rows = prime_file.query(f"request_text == '{request_text}'")
+            # Удаляем символы новой строки и другие пробельные символы
+            safe_request_text = request_text.replace('\n', '').replace('\r', '')
+            filtered_rows = prime_file.query(f"request_text == '{safe_request_text}'")
             if len(filtered_rows) == 0:
                 print ("По запросу " + request_text + " не найдено данных")
             else:
@@ -53,7 +55,9 @@ class rag_metrick:
                     'metrics'        : metrix_data
                 }])
 
-                metrics_file = pandas.concat([metrics_file, new_array], ignore_index=True)
+                metrics_file = metrics_file.dropna(axis=1, how='all')
+                new_array = new_array.dropna(axis=1, how='all')
+                metrics_file = pandas.concat([metrics_file.dropna(axis=1, how='all'), new_array], ignore_index=True)
                 metrics_file.to_csv(metrics_file_name, index=False, encoding='utf-8')
 
         return metrics_file_name
