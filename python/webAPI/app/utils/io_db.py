@@ -17,6 +17,7 @@ from app.config import settings_llm, settings
 
 from langchain_ollama import OllamaLLM
 from langchain.schema import HumanMessage
+from langchain_gigachat import GigaChat
 
 class LLM_Models(Enum):
     Olama3 = settings_llm.MODEL
@@ -199,13 +200,7 @@ class DbHelper:
 
         vectordb = self.get_vectror_db()
 
-        selected_llm_model = llm_model if llm_model else self.default_model
-
-        if selected_llm_model == LLM_Models.Olama3:
-            llm = OllamaLLM(
-                model=selected_llm_model, temperature = "0.1")
-        else:
-            return 'Бот не поддерживает модель ({})'.format(llm_model.name)
+        llm = self.get_llm(llm_model)
 
         #print(dir(vectordb))
 
@@ -214,13 +209,6 @@ class DbHelper:
         search_object = search_class(prompt, self.user_name, vectordb)
         data =  search_object.seach_from_db()
 
-        #data = vectordb.similarity_search(prompt,k=4)
-        #embedding_vector  = OllamaLLM().embed_query(prompt) 
-        #data = vectordb.similarity_search_by_vector(embedding_vector)
-        #Вы полезный ассистент. Вы отвечаете на вопросы о документации, хранящейся в
-        #question = f"Используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
-        #question = f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {data}. Ответь на русском языке на этот запрос: {prompt} и укажи source "
-
         class_name_promt = settings_llm.CLASS_NAME_PROMT
         promt_class = getattr(io_promt, class_name_promt)
         promt_object = promt_class(data, prompt)
@@ -228,33 +216,36 @@ class DbHelper:
 
         text = llm.invoke([HumanMessage(content=question)])
 
+        if LLM_Models.Olama3.value == "gigachat":
+            text = text.content
+
         return text
     
     def get_free_answer (self, prompt, llm_model: LLM_Models = None):
         
+        llm = self.get_llm(llm_model)     
+        question = f"Ответь на русском языке: {prompt}  "
+        text = llm.invoke([HumanMessage(content=question)])
+
+        if LLM_Models.Olama3.value == "gigachat":
+            text = text.content
+        
+        return text
+    
+    def get_llm(self, llm_model: LLM_Models = None):
+
         selected_llm_model = llm_model if llm_model else self.default_model
 
-        if selected_llm_model == LLM_Models.Olama3:
+        if LLM_Models.Olama3.value == "gigachat":
+            # Указываем ключ API
+            gigachat_key = settings.GIGACHAT_TOKEN
+            llm = GigaChat(credentials=gigachat_key, verify_ssl_certs=False,)
+        else:
             llm = OllamaLLM(
                 model=selected_llm_model, temperature = "0.1")
-        else:
-            return 'Бот не поддерживает модель ({})'.format(llm_model.name)
-        
-        question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
-        text = llm.invoke([HumanMessage(content=question)])
-        
-        '''
-        model_name = "cointegrated/LaBSE-en-ru"
-        model = SentenceTransformer(model_name)
-        question = [prompt]
-        embedings = model.encode(question)
-  
-        llm = OllamaLLM(
-                model=embedings, temperature = "0.1")
-        
-        text = llm.invoke([HumanMessage(content=question)])
-        '''
-        return text
+            
+        return llm
+
         
         
 
