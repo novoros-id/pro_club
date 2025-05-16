@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     API_V1_STR: str
 
+    URL_1C_ROOT: str
+    URL_TELEBOT_ROOT: str
+    UID_PROGRAM_1C: str
+    UID_PROGRAM_TELEBOT: str
     CONNECTION_FILE_PATH: str
 
     MAIN_FOLDER_PATH: str
