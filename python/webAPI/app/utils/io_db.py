@@ -1,4 +1,5 @@
 import os
+import base64
 from typing import Optional, Union, Type, List
 from enum import Enum
 import json
@@ -234,14 +235,21 @@ class DbHelper:
         
         selected_llm_model = llm_model if llm_model else self.default_model
 
+        encoded_credentials = base64.b64encode(f"{settings_llm.USER_LLM}:{settings_llm.PASSWORD_LLM}".encode()).decode()
+        headers = {'Authorization': f'Basic {encoded_credentials}'}
+        
         if selected_llm_model == LLM_Models.Olama3:
             llm = OllamaLLM(
-                model=selected_llm_model, temperature = "0.1")
+                model=selected_llm_model, temperature = "0.1", base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
         else:
             return 'Бот не поддерживает модель ({})'.format(llm_model.name)
         
         question = f"Вы полезный ассистент. Вы отвечаете на вопросы пользователей. Ответь на русском языке на этот запрос: {prompt} Отвечай коротко и по делу "
-        text = llm.invoke([HumanMessage(content=question)])
+
+        try:
+            text = llm.invoke([HumanMessage(content=question)])
+        except Exception as e:
+              print(f"Произошла ошибка: {str(e)}")
         
         '''
         model_name = "cointegrated/LaBSE-en-ru"
