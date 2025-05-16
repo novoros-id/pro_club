@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str 
     ACCESS_TOKEN_EXPIRE_MINUTES: int
-    
+    GIGACHAT_TOKEN: str 
+
     # CORS (разрешенные источники)
     ALLOWED_ORIGINS: list[str]
     ALLOW_METHODS: list[str]
@@ -38,6 +39,9 @@ class LLM_Settings(BaseSettings):
     CLASS_NAME_SEARCH: str
     CLASS_NAME_PROMT: str
     MODEL: str
+    URL_LLM: str
+    USER_LLM: str
+    PASSWORD_LLM: str
 
     model_config = SettingsConfigDict(env_file="app/.env.llm",
                                     env_file_encoding='utf-8')

@@ -22,6 +22,7 @@ async def send_request(response_data: SimpleResponse, request_name: str, db_prov
     url = program_connection.url + "/" + program_connection.endpoint
     
     if program_connection.clienttype == TypeProgram.Telegram.value:
+
         headers = {
             "accept": "application/json",
             "Content-Type": "application/json"

@@ -12,12 +12,12 @@ from app.config import settings
         data = json.load(file)
         return data.get(key) """
 
-def get_user_folder(key):
-    """
+"""def get_user_folder(key):
+    
     Возвращает список папок (пользователей) из дериктории указаной в конфиге.
     :key: Ключ указанный в конфиге, содержащий путь к дериктории.
     :return: Список имен папок в указанной дериктории
-    """
+    
     try:
         folder_path = get_config_value(key)
 
@@ -26,7 +26,7 @@ def get_user_folder(key):
         else:
             raise FileNotFoundError(f'Путь {folder_path} из конфигурации не найден или не существует')
     except Exception as e:
-        raise RuntimeError(f'Ошибка при получении списка папок пользователей: {e}')   
+        raise RuntimeError(f'Ошибка при получении списка папок пользователей: {e}')   """
     
 def create_file_user_config (user_name):
     import io_file_operation
