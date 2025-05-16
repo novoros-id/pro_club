@@ -1,18 +1,10 @@
 {
     "6a09f20a-8de6-11e1-b3e1-001617ec3f2a": {
       "program_uid": "6a09f20a-8de6-11e1-b3e1-001617ec3f2a",
-      "clienttype": "1C",
+      "clienttype": "OneC",
       "client_login": "Администратор",
       "client_pass": "",
       "url": "http://10.254.172.18:446/1C_CPM_NIOKR_AVAGANOV_DEV/hs/proai",
-      "endpoint": "response"
-    },
-    "7a09f20a-8de6-11e1-b3e1-001617ec3f2a": {
-      "program_uid": "7a09f20a-8de6-11e1-b3e1-001617ec3f2a",
-      "clienttype": "1C",
-      "client_login": "ВагановА",
-      "client_pass": "Je2Tucol",
-      "url": "http://10.254.172.18:446/1C_KnowledgeBase_ws/hs/proai",
       "endpoint": "response"
     },
     "1a09f20a-8de6-11e1-b3e1-001617ec3f7a": {
@@ -21,14 +13,6 @@
       "client_login": "ВагановА",
       "client_pass": "dI2mygic",
       "url": "http://10.254.172.18:446/1C_SPPR_VAGANOV/hs/proai",
-      "endpoint": "response"
-    },
-    "8a09f20a-8de6-11e1-b3e1-001617ec3f3a": {
-      "program_uid": "8a09f20a-8de6-11e1-b3e1-001617ec3f3a",
-      "clienttype": "1C",
-      "client_login": "Администратор",
-      "client_pass": "",
-      "url": "http://10.254.172.18:446/1C_MODELING_MARTIROSYAN/hs/proai",
       "endpoint": "response"
     },
     "e23429d1-c015-4d4b-8ab5-3f0689ef9805": {
