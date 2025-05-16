@@ -17,6 +17,8 @@ _cache_lock = threading.Lock()
 
 async def send_request(response_data: SimpleResponse, request_name: str) -> httpx.Response:
 
+    print("send_request")
+
     client_data = get_database_config(response_data.code_uid.program_uid)
     url = client_data["url"] + "/" + client_data["endpoint"]
 

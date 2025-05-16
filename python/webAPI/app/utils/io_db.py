@@ -1,4 +1,5 @@
 import os
+import base64
 from typing import Optional, Union, Type, List
 from enum import Enum
 import json
@@ -236,14 +237,17 @@ class DbHelper:
 
         selected_llm_model = llm_model if llm_model else self.default_model
 
+        encoded_credentials = base64.b64encode(f"{settings_llm.USER_LLM}:{settings_llm.PASSWORD_LLM}".encode()).decode()
+        headers = {'Authorization': f'Basic {encoded_credentials}'}
+        
         if LLM_Models.Olama3.value == "gigachat":
             # Указываем ключ API
             gigachat_key = settings.GIGACHAT_TOKEN
             llm = GigaChat(credentials=gigachat_key, verify_ssl_certs=False,)
-        else:
+        else selected_llm_model == LLM_Models.Olama3:
             llm = OllamaLLM(
-                model=selected_llm_model, temperature = "0.1")
-            
+                model=selected_llm_model, temperature = "0.1", base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+        
         return llm
 
         
