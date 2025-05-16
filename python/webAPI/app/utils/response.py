@@ -1,28 +1,28 @@
 import httpx
+from fastapi import Depends
 from typing import Dict, Any
 from app.models import SimpleRequest, SimpleResponse
+from app.db_models import TypeProgram
 from app.config import settings
-import json
-import threading
-import os
 import base64
+from app.deps import get_db_provider, DB_Provider
+from app.core.provider_db import Provider, DataProvider
 
 # Путь к файлу с JSON (замени на свой)
-JSON_FILE_PATH = "app/utils/clients.json"
+#JSON_FILE_PATH = "app/utils/clients.json"
 
-# Глобальные переменные для кэша
+""" # Глобальные переменные для кэша
 _database_cache = None
-_cache_lock = threading.Lock()
+_cache_lock = threading.Lock() """
 
 
-async def send_request(response_data: SimpleResponse, request_name: str) -> httpx.Response:
+async def send_request(response_data: SimpleResponse, request_name: str, db_provider: Provider) -> httpx.Response:
 
-    print("send_request")
+    program_connection = db_provider.get_connection_settings(response_data.code_uid.program_uid)
+    url = program_connection.url + "/" + program_connection.endpoint
+    
+    if program_connection.clienttype == TypeProgram.Telegram.value:
 
-    client_data = get_database_config(response_data.code_uid.program_uid)
-    url = client_data["url"] + "/" + client_data["endpoint"]
-
-    if client_data["clienttype"] == "telegram":
         headers = {
             "accept": "application/json",
             "Content-Type": "application/json"
@@ -34,8 +34,8 @@ async def send_request(response_data: SimpleResponse, request_name: str) -> http
             return response
     else:
 
-        username = client_data["client_login"]
-        password = client_data["client_pass"]
+        username = program_connection.client_login
+        password = program_connection.client_pass
         credentials = f"{username}:{password}".encode("utf-8")
         encoded_credentials = base64.b64encode(credentials).decode("utf-8")
 
@@ -48,8 +48,8 @@ async def send_request(response_data: SimpleResponse, request_name: str) -> http
             response.raise_for_status() 
             return response
 
-def load_database_config():
-    """Загружает JSON в память, если он еще не загружен."""
+""" def load_database_config():
+    #Загружает JSON в память, если он еще не загружен
     global _database_cache
     if _database_cache is None:  # Ленивая загрузка
         with _cache_lock:
@@ -62,16 +62,16 @@ def load_database_config():
                     _database_cache = {}
 
 def get_database_config(program_uid):
-    """Возвращает конфигурацию базы, лениво загружая JSON при первом вызове."""
+    #Возвращает конфигурацию базы, лениво загружая JSON при первом вызове.
     load_database_config()  # Проверяем, загружен ли кэш
     return _database_cache.get(program_uid, None)
 
 def reload_database_config():
-    """Принудительно обновляет кэш (если JSON изменился)."""
+    #Принудительно обновляет кэш (если JSON изменился).
     global _database_cache
     with _cache_lock:
         _database_cache = None  # Сбрасываем кэш
-    load_database_config()  # Перезагружаем данн
+    load_database_config()  # Перезагружаем данн """
 
 ##############################
 ##############################
