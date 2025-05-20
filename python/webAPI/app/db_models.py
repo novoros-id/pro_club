@@ -13,7 +13,7 @@ class User(Base):
     
     id: Mapped[str] = mapped_column(String, primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    email:Mapped[str] = mapped_column(String, unique=True, nullable=True)
+    email:Mapped[str] = mapped_column(String, nullable=True)
 
 
 class Program(Base):

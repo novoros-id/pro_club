@@ -60,7 +60,7 @@ class DatabaseProvider(DataProvider):
             description=client_data.description,
             url=client_data.connection_settings.url,
             client_login=client_data.connection_settings.client_login,
-            сlient_pass=client_data.connection_settings.client_pass,
+            client_pass=client_data.connection_settings.client_pass,
             endpoint=client_data.connection_settings.endpoint
         )
         return program_connection
@@ -86,7 +86,8 @@ class DatabaseProvider(DataProvider):
                 endpoint = program_connection.endpoint
             )
             client_data.connection_settings = connection_settings
-            self.session.add()
+            self.session.commit()
+            self.session.refresh(connection_settings)
         else:
             client_data.name = program_connection.name
             client_data.clienttype = program_connection.clienttype
@@ -132,7 +133,7 @@ class FileProvider(DataProvider):
             description='',
             url=client_data['url'],
             client_login=client_data['client_login'],
-            сlient_pass=client_data['client_pass'],
+            client_pass=client_data['client_pass'],
             endpoint=client_data['endpoint']
         )
         return program_connection

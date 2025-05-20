@@ -244,7 +244,7 @@ class DbHelper:
             # Указываем ключ API
             gigachat_key = settings.GIGACHAT_TOKEN
             llm = GigaChat(credentials=gigachat_key, verify_ssl_certs=False,)
-        else selected_llm_model == LLM_Models.Olama3:
+        else:
             llm = OllamaLLM(
                 model=selected_llm_model, temperature = "0.1", base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
         
