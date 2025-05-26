@@ -25,7 +25,8 @@ class UserService:
         if user == None and is_create_user == False:
                 # Todo передаавать имя, идентифкатор и почту. Пока парается только ИД это и есть имя
                 user = db_provider.create_user(user_id, user_id, "")
-                io_file_operation.create_folder_structure(user)
+        io_file_operation.create_folder_structure(user)
+        
         return user
     
     async def create_user(self, 

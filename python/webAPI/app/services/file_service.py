@@ -18,7 +18,7 @@ class FileService:
                                      db_provider: Provider,
                                      background_tasks: BackgroundTasks) -> Any:
         saved_files = await self.save_user_files(user, files, request, db_provider)
-        background_tasks.add_task(self.process_user_files, user, request, db_provider, saved_files)
+        background_tasks.add_task(self.process_user_files, request, user, db_provider, saved_files)
 
     async def save_user_files(self, 
                               user: UserBase, 

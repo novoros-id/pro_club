@@ -187,7 +187,6 @@ class sfDocumentProcessingPipeline:
         documents = self.loader.load_documents()
         return self.splitter.split(documents)
 
-# Абстрактный базовый класс для загрузчиков документов
 class sfBaseDocumentLoader(ABC):
     @abstractmethod
     def load_documents(self) -> list:
@@ -254,7 +253,6 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         text = re.sub(r'\n{3,}', '\n\n', text)
         # 3. удаляем пробелы в начале и конце строк
         text = "\n".join([line.strip() for line in text.splitlines()])
-
         return text.strip()
 
     def load_documents(self):
@@ -408,6 +406,9 @@ class sfPDFLoader(sfBaseDocumentLoader):
 
 class get_keywords:
     
+    import base64
+
+    from app.config import settings_llm, settings
     from typing import List
     from langchain_ollama import OllamaLLM
     
@@ -449,9 +450,18 @@ class get_keywords:
             {}
         )
     }
+
+    encoded_credentials = base64.b64encode(f"{settings_llm.USER_LLM}:{settings_llm.PASSWORD_LLM}".encode()).decode()
+    headers = {'Authorization': f'Basic {encoded_credentials}'}
+
     X_char = 1000
-    llm_class = OllamaLLM(model="deepseek-r1:latest", temperature = "0.1")
-    llm_keywords = OllamaLLM(model="llama3:latest", temperature = "0.0")
+    #llm_class = OllamaLLM(model="deepseek-r1:latest", temperature = "0.1")
+    #llm_keywords = OllamaLLM(model="llama3:latest", temperature = "0.0")
+    llm_class = OllamaLLM( 
+                model="gemma3:12b", temperature = 0.1, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+    llm_keywords = OllamaLLM( 
+                model="gemma3:12b", temperature = 0.0, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+   
     
     def __init__(self, documents: List[LangDocument]):
         self.documents = documents

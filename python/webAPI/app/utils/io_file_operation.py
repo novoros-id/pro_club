@@ -39,7 +39,8 @@ def return_user_folder_pdf(user: UserBase):
 
 def return_user_folder_input(user: UserBase):
     user_folder_path = return_user_folder(user)
-    return (os.path.join(user_folder_path, "input"))
+    result = os.path.join(user_folder_path, "input")
+    return result
 
 def return_user_folder_db(user: UserBase):
     user_folder_path = return_user_folder(user)
@@ -127,6 +128,7 @@ def copy_user_files_from_input(user: UserBase) -> Any:
     result: dict = {"result": True, "files": [], "mesaage": []}
 
     user_folder_input = return_user_folder_input(user)
+    print(user_folder_input)
     user_folder_pdf = return_user_folder_pdf(user)
 
     files = os.listdir(user_folder_input)

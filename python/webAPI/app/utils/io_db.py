@@ -89,7 +89,7 @@ class DbHelper:
             return
         
         self.clear_files_in_db(files_to_update)
-        pdf_files_list = pdf_files_list + files_to_update
+        pdf_files_list = list(set(pdf_files_list + files_to_update))
         
         for file_item in pdf_files_list:
             separate_text = self.separate_file(file_item)
@@ -245,8 +245,8 @@ class DbHelper:
             gigachat_key = settings.GIGACHAT_TOKEN
             llm = GigaChat(credentials=gigachat_key, verify_ssl_certs=False,)
         else:
-            llm = OllamaLLM(
-                model=selected_llm_model, temperature = "0.1", base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+            llm = OllamaLLM( 
+                model=selected_llm_model, temperature = 0.1, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
         
         return llm
 
