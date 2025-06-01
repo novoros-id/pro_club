@@ -7,7 +7,36 @@ class promt_default:
         self.prompt = prompt
     def get_promt(self):
         return f"Вы полезный ассистент. Вы отвечаете на вопросы о документации, используя эти данные: {self.data}. Ответь на русском языке на этот запрос: {self.prompt} и укажи source "
-    
+
+class promt_instr:
+    def __init__(self, data, prompt):
+        self.data = data
+        self.prompt = prompt
+    def get_promt(self):
+        return f"""
+Контекст (DOCUMENT):
+{self.data}
+
+Вопрос (QUESTION):
+{self.prompt}
+
+Инструкция:
+Ответь на вопрос, используя исключительно информацию из документа выше.
+Не додумывай и не делай предположений.
+Если в документе нет достаточной информации для точного ответа, верни: НЕТ ОТВЕТА.
+
+Обязательно укажи источник информации, откуда ты взял ответ. 
+Источник содержится в метаданных в поле source. 
+
+Формат ответа:
+1. ответ на русском языке.
+2. Источник(и): перечисли значение поля "source" из документа.
+
+Пример:
+Ответ: ...  
+Источник: source_1.pdf
+"""
+  
 class promt_test:
     def __init__(self, data, prompt):
         self.data = data

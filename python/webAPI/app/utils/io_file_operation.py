@@ -77,6 +77,17 @@ def file_is_word(file_path):
         #print('Файл не имеет расширения Doc.')
         return False 
 
+def file_is_pptx(file_path):
+    # Получаем расширение файла
+    extension = os.path.splitext(file_path)[1]
+
+    if extension.lower() == '.pptx':
+        #print('Файл имеет расширение pptx.')
+        return True
+    else:
+        #print('Файл не имеет расширения pptx.')
+        return False 
+
 def delete_all_files(user: UserBase):
     input_user_files = return_user_folder_input(user)
     delete_all_files_in_folder(input_user_files)
@@ -134,7 +145,7 @@ def copy_user_files_from_input(user: UserBase) -> Any:
     files = os.listdir(user_folder_input)
     
     for file in files:
-        if file_is_pdf(file) or file_is_word(file):
+        if file_is_pdf(file) or file_is_word(file) or file_is_pptx(file) :
         #if file_is_pdf(file):
             source_file_path = os.path.join(user_folder_input, file)
             destination_file_path = os.path.join(user_folder_pdf, file)         
@@ -149,7 +160,7 @@ def copy_user_files_from_input(user: UserBase) -> Any:
                 result["mesaage"].append(f"Ошибка при копировании файла {file}: {e}")
         else:
             result["result"] = False
-            result["mesaage"].append(f"Обрабатываются только файлы в формате docx и pdf файл " + file + " не может быть обработан")
+            result["mesaage"].append(f"Обрабатываются только файлы в формате docx, pdf, pptx файл " + file + " не может быть обработан")
              
     return result
 
