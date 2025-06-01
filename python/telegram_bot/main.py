@@ -10,28 +10,172 @@ import tempfile
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
 import time
+import pandas
+import datetime
 
 # === Инициализация ===
 app = FastAPI()
 bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
 
-# Словарь для хранения пар requestId и chatId
+# Словарь для хранения данных запросов
 request_chat_map = {}
+
+# История запросов по chat_id
+user_history = {}
 
 # Объект для выполнения фоновых задач
 executor = ThreadPoolExecutor(max_workers=3)
 
+max_telegram_message_length = 3800
+
+# ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
+class LogManager:
+    def __init__(self, logs_folder_path, logs_file_name):
+        self.logs_folder_path = logs_folder_path
+        self.logs_file_name = os.path.join(logs_folder_path, logs_file_name)
+        self.logs = self._initialize_logs()
+
+    def _initialize_logs(self):
+        if not os.path.exists(self.logs_folder_path):
+            os.makedirs(self.logs_folder_path)
+        if not os.path.exists(self.logs_file_name):
+            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+            return logs    
+        # Если файл существует, читаем его    
+        try:
+            return pandas.read_csv(self.logs_file_name, encoding='utf-8')
+        except Exception as e:
+            print(f"Ошибка при чтении логов: {e}")
+            return pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+
+    # При $start_pipeline создаем отдельный файл с логами
+    def create_log_pipeline(self):
+        current_time = datetime.datetime.now()
+        log_file_name = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        log_file_path = os.path.join(self.logs_folder_path, log_file_name)
+        
+        try:
+            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+            self.logs_file_name = log_file_path
+        except Exception as e:
+            print(f'Ошибка при создании файла тестовых логов: {e}')
+            raise
+
+        return log_file_name
+    
+    #По завершении работы тестового конвейера вернём путь к основному лог файлу
+    def switch_to_main_logs(self):
+        main_log_file_name = "bot_logs.csv"
+        self.logs_file_name = os.path.join(self.logs_folder_path, main_log_file_name)
+
+    def log_rating(self, chat_id, rating):
+        # Убедимся, что колонка rating имеет тип object
+        if 'rating' in self.logs.columns and self.logs['rating'].dtype != 'object':
+            self.logs['rating'] = self.logs['rating'].astype('object')
+
+        # Обновляем запись в логах, по соответствующему chat_id
+        if not self.logs.empty:
+            # Находим последнюю запись в логах для этого chat_id
+            self.logs.loc[self.logs['chat_id'] == chat_id, 'rating'] = rating
+            
+        # Сохраняем логи
+        try:
+            self.logs.to_csv(self.logs_file_name, index=False, encoding='UTF-8')
+        except Exception as e:
+            print(f'Ошибка при сохранении логов: {e}')
+
+    def log_interaction(self, request_time, chat_id, user_name, request_text, response_time, response_text, used_files_path, rating=None):
+        used_files_str = ", ".join(os.listdir(used_files_path)) if os.path.exists(used_files_path) else "Папка не создана"
+
+        # Создаем запись логов
+        new_array = pandas.DataFrame([{
+            'request_time'  : request_time,
+            'chat_id'       : chat_id,
+            'user_name'     : user_name,
+            'request_text'  : request_text,
+            'response_time' : response_time,
+            'response_text' : response_text,
+            'used_files'    : used_files_str,
+            'rating'        : rating
+        }])
+
+        if self.logs.empty:
+            self.logs = new_array
+        else:
+            self.logs = pandas.concat([self.logs, new_array], ignore_index=True)
+
+        try:
+            self.logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+        except Exception as e:
+            print(f'Ошибка при создании логов: {e}')
+
+# Обрезает текст, если он превышает mmax_length, добавляя '...' в концу
+def truncate_text(text, max_length=max_telegram_message_length):
+    return text if len(text) <=max_length else text[:max_length] + "..."
+
 @app.post("/process")
 def process_request(data: SimpleResponse):
     request_id = data.code_uid.request_uid
-    chat_id = request_chat_map.get(request_id)
-    if chat_id:
+    entry = request_chat_map.get(request_id)
+
+    if entry:
+        chat_id = entry["chat_id"]
+        answer = data.answer
+        query_text = entry["query_text"]
+        message_id = entry["message_id"]
+        user_name = entry["username"]
+        request_time = entry["timestamp"]
+
+        # Сохраняем ответ и обновляем статус
+        entry["response"] = answer
+        entry["status"] = "completed"
+
+        # Добавляем в историю пользователя
+        if chat_id not in user_history:
+            user_history[chat_id] = []
+        user_history[chat_id].append({
+            "request_uid": request_id,
+            "query": query_text,
+            "response": answer,
+            "timestamp": time.time(),
+            "sources": getattr(data, "sources", [])
+        })
+        # Формируем текст ответа
+        response_text = truncate_text(answer)
+        sources = getattr(data, "sources", None)
+
+        # Запись в лог
+        logs_manager.log_interaction(
+            request_time    =request_time,
+            chat_id         =chat_id,
+            user_name       =user_name,
+            request_text    =query_text,
+            response_time   =datetime.datetime.now(),
+            response_text   =response_text,
+            used_files_path ="None",
+            rating          =None
+            )
+
+        if sources:
+            response_text += "\n\nИсточники:\n" + "\n".join([f"- {s}" for s in sources])
+
         try:
-            bot.send_message(chat_id=chat_id, text=data.answer)
+            bot.send_message(
+                chat_id=chat_id,
+                text=response_text,
+                reply_to_message_id=message_id  # <-- делаем reply
+            )
         except Exception as e:
             print(f"[ERROR] При отправке сообщения: {e}")
+    else:
+        print(f"Запрос с ID {request_id} не найден!")
+
     return {"status": "ok"}
 
+logs_folder_path = settings.LOG_FOLDER
+logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
 
 # === Кнопки ===
 HELP_BUTTON = 'Помощь'
@@ -86,7 +230,18 @@ def handle_buttons(message):
 
         if text == FILES_LIST_BUTTON:
             simpleRequest = request.prepare_request(username, text)
-            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            request_data = {
+                "chat_id": chatID,
+                "query_text": text,
+                "request_uid": simpleRequest.code_uid.request_uid,
+                "status": "processing",
+                "timestamp": datetime.datetime.now(),
+                "response": None,
+                "files": [],
+                "message_id": message.message_id,
+                "username": username
+            }
+            request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/files/list')
 
         elif text == HELP_BUTTON:
@@ -100,7 +255,18 @@ def handle_buttons(message):
                 bot.send_message(chatID, 'Извините, включен ограниченный режим, нельзя удалять файлы!')
             else:
                 simpleRequest = request.prepare_request(username, text)
-                request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+                request_data = {
+                    "chat_id": chatID,
+                    "query_text": text,
+                    "request_uid": simpleRequest.code_uid.request_uid,
+                    "status": "processing",
+                    "timestamp": datetime.datetime.now(),
+                    "response": None,
+                    "files": [],
+                    "message_id": message.message_id,
+                    "username": username
+                }
+                request_chat_map[simpleRequest.code_uid.request_uid] = request_data
                 executor.submit(request.send_request, simpleRequest, '/api/v1/files/delete')
 
         elif not text.strip():
@@ -109,14 +275,35 @@ def handle_buttons(message):
         elif text.count('$') == 1:
             bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...')
             simpleRequest = request.prepare_request(username, text)
-            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            request_data = {
+                "chat_id": chatID,
+                "query_text": text,
+                "request_uid": simpleRequest.code_uid.request_uid,
+                "status": "processing",
+                "timestamp": datetime.datetime.now(),
+                "response": None,
+                "files": [],
+                "message_id": message.message_id,
+                "username": username
+            }
+            request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/free_answer')
 
         else:
-            bot.send_message(chatID,
-                             'Секунду, думаю...')
+            bot.send_message(chatID, 'Секунду, думаю...')
             simpleRequest = request.prepare_request(username, text)
-            request_chat_map[simpleRequest.code_uid.request_uid] = chatID
+            request_data = {
+                "chat_id": chatID,
+                "query_text": text,
+                "request_uid": simpleRequest.code_uid.request_uid,
+                "status": "processing",
+                "timestamp": datetime.datetime.now(),
+                "response": None,
+                "files": [],
+                "message_id": message.message_id,
+                "username": username
+            }
+            request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
 
     except Exception as e:
@@ -160,7 +347,18 @@ def handle_document(message):
                     files = [('files', (file_name, file.read(), mime_type))]
 
             request_form = request.prepare_request(username, "")
-            request_chat_map[request_form.code_uid.request_uid] = chatID
+            request_data = {
+                "chat_id": chatID,
+                "query_text": "",
+                "request_uid": request_form.code_uid.request_uid,
+                "status": "processing",
+                "timestamp": datetime.datetime.now(),
+                "response": None,
+                "files": [file_name],
+                "message_id": message.message_id,
+                "username": username
+            }
+            request_chat_map[request_form.code_uid.request_uid] = request_data
             response = request.send_file_request(files, request_form, '/api/v1/files/upload')
             if response.status_code != 200:
                 bot.send_message(message.chat.id, f"Ошибка при загрузке файла '{file_name}': {response.text}")
