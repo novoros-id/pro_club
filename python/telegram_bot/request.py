@@ -1,42 +1,44 @@
-
-import httpx
+import requests
 import uuid
 import json
 import mimetypes
 from models import SimpleRequest
 from config import settings
 
-async def send_request(response_data: SimpleRequest, endpoint: str) -> httpx.Request:
 
+def send_request(response_data: SimpleRequest, endpoint: str) -> requests.Response:
+    """
+    Отправляет JSON-запрос к API
+    """
     url = settings.API_URL + endpoint
 
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json"
     }
-    
-    async with httpx.AsyncClient() as client:
-        request = await client.post(url, headers=headers, json=response_data.dict())
-        return request
-    
-async def send_file_request(files: list[str], request: SimpleRequest, endpoint: str) -> httpx.Response:
-    
+
+    response = requests.post(url, headers=headers, json=response_data.dict())
+    return response
+
+
+def send_file_request(files: list, request: SimpleRequest, endpoint: str) -> requests.Response:
+    """
+    Отправляет файлы и данные формы на указанный эндпоинт
+    """
     url = settings.API_URL + endpoint
-    boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
 
-    headers = {
-        "accept": "application/json",
-        "Content-Type": f"multipart/form-data; boundary={boundary}"
-       }
-    
+    # Генерируем boundary вручную или используем автоматически создаваемый requests
     data = {'request_form': json.dumps(request.dict())}
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, files=files, data=data)
-        return response
-    
-def prepare_request(user_name: str, text: str) -> SimpleRequest:
 
+    # multipart/form-data запрос будет создан автоматически
+    response = requests.post(url, files=files, data=data)
+    return response
+
+
+def prepare_request(user_name: str, text: str) -> SimpleRequest:
+    """
+    Подготавливает объект запроса
+    """
     return SimpleRequest(
         code_uid={
             "username": user_name,
@@ -46,12 +48,20 @@ def prepare_request(user_name: str, text: str) -> SimpleRequest:
         request=text
     )
 
+
 def generate_request_uid():
+    """
+    Генерирует уникальный ID запроса
+    """
     return str(uuid.uuid4())
 
+
 def get_curl_command(file_paths: list[str], data: str, endpoint: str) -> str:
+    """
+    Генерирует команду curl для отладки
+    """
     url = settings.API_URL + endpoint
- 
+
     curl_command = f"curl -X POST '{url}' -H 'accept: application/json' -H 'Content-Type: multipart/form-data'"
 
     for file_path in file_paths:

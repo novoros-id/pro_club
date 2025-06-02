@@ -57,6 +57,7 @@ class sf_add_keywords_512_chunk:
     def separate_file(self):
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_community.document_loaders import Docx2txtLoader
+        from langchain_community.document_loaders import UnstructuredPowerPointLoader
         from langchain.text_splitter import (
             RecursiveCharacterTextSplitter,
         )
@@ -65,9 +66,14 @@ class sf_add_keywords_512_chunk:
         basename, extension = os.path.splitext(self.file_path)
         match extension:
             case ".docx":
+                print("Statr load docx")
                 loader = Docx2txtLoader(self.file_path)
-            case ".pdf":  
+            case ".pdf": 
+                print("Statr load pdf") 
                 loader = PyPDFLoader(self.file_path)
+            case ".pptx":
+                print("Statr load pptx")   
+                loader = UnstructuredPowerPointLoader(self.file_path)
             case _:
                 print(f"Данный файл не поддерживается {self.file_path}")
                 return []

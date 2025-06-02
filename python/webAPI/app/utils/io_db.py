@@ -199,23 +199,29 @@ class DbHelper:
 
     def get_answer(self, prompt, llm_model: LLM_Models = None):
 
+        print("get_answer")
+
         vectordb = self.get_vectror_db()
 
         llm = self.get_llm(llm_model)
 
-        #print(dir(vectordb))
+        print("get_answer + llm")
 
         class_name_search = settings_llm.CLASS_NAME_SEARCH
         search_class = getattr(io_search_from_db, class_name_search)
         search_object = search_class(prompt, self.user_name, vectordb)
         data =  search_object.seach_from_db()
 
+        print("get_answer + io_search_from_db")
+
         class_name_promt = settings_llm.CLASS_NAME_PROMT
         promt_class = getattr(io_promt, class_name_promt)
         promt_object = promt_class(data, prompt)
         question  =  promt_object.get_promt()
 
-        text = llm.invoke([HumanMessage(content=question)])
+        print("get_answer + get_promt")
+
+        text = llm.invoke(question)
 
         if LLM_Models.Olama3.value == "gigachat":
             text = text.content
