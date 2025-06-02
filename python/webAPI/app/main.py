@@ -5,7 +5,7 @@ from typing import Annotated
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 import logging
-from app.routes import users, files, llm
+from app.routes import users, files, llm, program_settings
 from app.config import settings
 
 # Настройка логирования
@@ -55,6 +55,7 @@ api_router = APIRouter(prefix=settings.API_V1_STR)
 api_router.include_router(users.router)
 api_router.include_router(llm.router)
 api_router.include_router(files.router)
+api_router.include_router(program_settings.router)
 app.include_router(api_router)
 
 # Корневой эндпоинт (проверка работы API)

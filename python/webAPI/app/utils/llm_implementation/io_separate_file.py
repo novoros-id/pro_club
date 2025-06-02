@@ -57,6 +57,7 @@ class sf_add_keywords_512_chunk:
     def separate_file(self):
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_community.document_loaders import Docx2txtLoader
+        from langchain_community.document_loaders import UnstructuredPowerPointLoader
         from langchain.text_splitter import (
             RecursiveCharacterTextSplitter,
         )
@@ -65,9 +66,14 @@ class sf_add_keywords_512_chunk:
         basename, extension = os.path.splitext(self.file_path)
         match extension:
             case ".docx":
+                print("Statr load docx")
                 loader = Docx2txtLoader(self.file_path)
-            case ".pdf":  
+            case ".pdf": 
+                print("Statr load pdf") 
                 loader = PyPDFLoader(self.file_path)
+            case ".pptx":
+                print("Statr load pptx")   
+                loader = UnstructuredPowerPointLoader(self.file_path)
             case _:
                 print(f"Данный файл не поддерживается {self.file_path}")
                 return []
@@ -187,7 +193,6 @@ class sfDocumentProcessingPipeline:
         documents = self.loader.load_documents()
         return self.splitter.split(documents)
 
-# Абстрактный базовый класс для загрузчиков документов
 class sfBaseDocumentLoader(ABC):
     @abstractmethod
     def load_documents(self) -> list:
@@ -236,77 +241,109 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         self.file_path = file_path
         self.loader_type = loader_type
 
+    # Функция очистки текста
     def clean_text(self, text:str) -> str:
         import re
         
-        # Удаление невидимых символов
         invisible_chars = ['\u200b', '\ufeff', '\xa0', '\x0c']
         for char in invisible_chars:
             text = text.replace(char, ' ' if char == '\xa0' else '')
-
-        # Замена повторяющихся символов: -----, ===, **** и т.п.
         text = re.sub(r'([\-=_*~#]{3,})', '', text)
-
-        # Удаление лишних пробелов с сохранением абзацев
-        # 1. сначала нормализуем пробелы внутри строк
         text = re.sub(r'[ \t]+', ' ', text)
-        # 2. заменяем 3 и более переносов строк на 2 (абзац)
         text = re.sub(r'\n{3,}', '\n\n', text)
-        # 3. удаляем пробелы в начале и конце строк
         text = "\n".join([line.strip() for line in text.splitlines()])
-
         return text.strip()
 
-    def load_documents(self):
-        if self.loader_type == "unstructured":
-            from  langchain_community.document_loaders import UnstructuredWordDocumentLoader
-            loader = UnstructuredWordDocumentLoader(self.file_path)
-        elif self.loader_type == "Docx2txtLoader":
-            from langchain_community.document_loaders import Docx2txtLoader
-            loader = Docx2txtLoader(self.file_path)
-        else:
-            raise ValueError(f"Неизвестный тип загрузчика для DOCX: {self.loader_type}")
-        
-        documents = loader.load()
-
-        # Очищаем документ
-        for doc in documents:
-            doc.page_content = self.clean_text(doc.page_content)
-
-        # Обновляем метаданные, чтобы source содержал только имя файла
-        file_name = os.path.basename(self.file_path)
-        for doc in documents:
-            doc.metadata["source"] = file_name
-
-        # Дополнительно извлекаем таблицы
-        tables_text, table_metadata = self.extract_tables()
-        if tables_text.strip():
-            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
-
-        return documents
+    def extract_text(self):
+        from docx import Document as DocxDocument
+        paragraphs = []
+        doc = DocxDocument(self.file_path)
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if text:
+                paragraphs.append(text)
+        print(paragraphs)
+        return "\n".join(paragraphs)
     
     def extract_tables(self):
-        from docx import Document as DocxDocument
-        extracted_tables = []
-        doc = DocxDocument(self.file_path)
         try:
-            for table in doc.tables:
-                rows = []
-                for row in table.rows:
-                    cells = [cell.text.strip() for cell in row.cells]
-                    rows.append("\t".join(cells))
-                table_text = "\n".join(rows)
-                if table_text.strip():
-                    extracted_tables.append(table_text)
-        except Exception as e:
-            print(f"Ошибка извлечения таблиц: {e}")
+            from docx2python import docx2python
 
-        if extracted_tables:
-            tables_text = "\n\n".join(extracted_tables)
-        else:
-            tables_text = ""
-        table_metadata = {"source": os.path.basename(self.file_path)}
-        return tables_text, table_metadata
+            result = docx2python(self.file_path)
+            table_docs = []
+            table_idx = 1
+            for section in result.body:
+                for element in section:
+                    if isinstance(element, list) and element and all(isinstance(row, list) for row in element):
+                        table_rows = []
+                    for row in element:
+                        # Убираем пробелы и скрытые переносы в ячейках
+                        clean_cells = [cell.strip().replace('\n', ' ') for cell in row]
+                        # Добавляем только если хотя бы одна ячейка непустая
+                        if any(clean_cells):
+                            table_rows.append(clean_cells)
+                    if not table_rows:
+                        continue
+                    # Первая строка — это заголовок
+                    header = table_rows[0]
+                    # Остальные строки — это данные
+                    data_rows = table_rows[1:]
+
+                    # Сохраняем таблицу в текстовом виде: сначала заголовок, затем данные
+                    lines = ["\t".join(header)]
+                    for row in data_rows:
+                        lines.append("\t".join(row))
+                    # Добавляем в общий список
+                    table_text = f"Таблица {table_idx}:\n" + "\n".join(lines)
+                    table_docs.append(table_text)
+                    table_idx += 1
+
+            tables_text = "\n\n".join(table_docs)
+            table_metadata = {"source": os.path.basename(self.file_path)}
+            print("\n=== Итоговый результат для RAG ===\n")
+            print(tables_text)
+            return tables_text, table_metadata
+        
+        except Exception as e:
+            print(f"Ошибка при обработке таблиц ({self.loader_type}): {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def load_documents(self):
+        try:
+            if self.loader_type == "python-docx":
+                text = self.extract_text()
+                text = self.clean_text(text)
+                docs = [LangDocument(page_content=text, metadata={"source": os.path.basename(self.file_path)})]
+            elif self.loader_type == "Docx2txtLoader":
+                from langchain_community.document_loaders import Docx2txtLoader
+                loader = Docx2txtLoader(self.file_path)
+                docs = loader.load()
+                for doc in docs:
+                    doc.page_content = self.clean_text(doc.page_content)
+                    doc.metadata["source"] = os.path.basename(self.file_path)
+            elif self.loader_type == "unstructured":
+                from langchain_community.document_loaders import UnstructuredWordDocumentLoader
+                loader = UnstructuredWordDocumentLoader(self.file_path)
+                docs = loader.load()
+                for doc in docs:
+                    doc.page_content = self.clean_text(doc.page_content)
+                    doc.metadata["source"] = os.path.basename(self.file_path)
+            else:
+                raise ValueError(f"Неизвестный тип загрузчика для DOCX: {self.loader_type}")
+            
+            # Извлекаем таблицы всегда одинаково (через python-docx)
+            tables_text, table_metadata = self.extract_tables()
+            if tables_text.strip():
+                docs.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+        except Exception as e:
+            print(f"Ошибка при загрузке документа ({self.loader_type}): {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+        return docs
 
 # Класс для загрузки PDF, объединяющий текст и таблицы
 class sfPDFLoader(sfBaseDocumentLoader):
@@ -408,6 +445,9 @@ class sfPDFLoader(sfBaseDocumentLoader):
 
 class get_keywords:
     
+    import base64
+
+    from app.config import settings_llm, settings
     from typing import List
     from langchain_ollama import OllamaLLM
     
@@ -449,9 +489,18 @@ class get_keywords:
             {}
         )
     }
+
+    encoded_credentials = base64.b64encode(f"{settings_llm.USER_LLM}:{settings_llm.PASSWORD_LLM}".encode()).decode()
+    headers = {'Authorization': f'Basic {encoded_credentials}'}
+
     X_char = 1000
-    llm_class = OllamaLLM(model="deepseek-r1:latest", temperature = "0.1")
-    llm_keywords = OllamaLLM(model="llama3:latest", temperature = "0.0")
+    #llm_class = OllamaLLM(model="deepseek-r1:latest", temperature = "0.1")
+    #llm_keywords = OllamaLLM(model="llama3:latest", temperature = "0.0")
+    llm_class = OllamaLLM( 
+                model="gemma3:12b", temperature = 0.1, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+    llm_keywords = OllamaLLM( 
+                model="gemma3:12b", temperature = 0.0, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+   
     
     def __init__(self, documents: List[LangDocument]):
         self.documents = documents

@@ -8,5 +8,5 @@
   "class_name_get_vectror_db": "gvid_multilingual_e5_large",
   "class_name_search": "s_k_2",
   "class_name_promt": "promt_default",
-  "model":"llama3"
+  "model":"gemma3:27b"
 }

@@ -1,4 +1,5 @@
 import os
+import base64
 from typing import Optional, Union, Type, List
 from enum import Enum
 import json
@@ -88,7 +89,7 @@ class DbHelper:
             return
         
         self.clear_files_in_db(files_to_update)
-        pdf_files_list = pdf_files_list + files_to_update
+        pdf_files_list = list(set(pdf_files_list + files_to_update))
         
         for file_item in pdf_files_list:
             separate_text = self.separate_file(file_item)
@@ -198,23 +199,29 @@ class DbHelper:
 
     def get_answer(self, prompt, llm_model: LLM_Models = None):
 
+        print("get_answer")
+
         vectordb = self.get_vectror_db()
 
         llm = self.get_llm(llm_model)
 
-        #print(dir(vectordb))
+        print("get_answer + llm")
 
         class_name_search = settings_llm.CLASS_NAME_SEARCH
         search_class = getattr(io_search_from_db, class_name_search)
         search_object = search_class(prompt, self.user_name, vectordb)
         data =  search_object.seach_from_db()
 
+        print("get_answer + io_search_from_db")
+
         class_name_promt = settings_llm.CLASS_NAME_PROMT
         promt_class = getattr(io_promt, class_name_promt)
         promt_object = promt_class(data, prompt)
         question  =  promt_object.get_promt()
 
-        text = llm.invoke([HumanMessage(content=question)])
+        print("get_answer + get_promt")
+
+        text = llm.invoke(question)
 
         if LLM_Models.Olama3.value == "gigachat":
             text = text.content
@@ -236,14 +243,17 @@ class DbHelper:
 
         selected_llm_model = llm_model if llm_model else self.default_model
 
+        encoded_credentials = base64.b64encode(f"{settings_llm.USER_LLM}:{settings_llm.PASSWORD_LLM}".encode()).decode()
+        headers = {'Authorization': f'Basic {encoded_credentials}'}
+        
         if LLM_Models.Olama3.value == "gigachat":
             # Указываем ключ API
             gigachat_key = settings.GIGACHAT_TOKEN
             llm = GigaChat(credentials=gigachat_key, verify_ssl_certs=False,)
         else:
-            llm = OllamaLLM(
-                model=selected_llm_model, temperature = "0.1")
-            
+            llm = OllamaLLM( 
+                model=selected_llm_model, temperature = 0.1, base_url=settings_llm.URL_LLM, client_kwargs={'headers': headers})
+        
         return llm
 
         

@@ -1,5 +1,6 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 class Settings(BaseSettings):
 
@@ -7,6 +8,7 @@ class Settings(BaseSettings):
     DEBUG: bool  
     VERSION: str 
     DESCRIPTION: str
+    USE_DB: bool
     DATABASE_URL: str
     SECRET_KEY: str 
     ACCESS_TOKEN_EXPIRE_MINUTES: int
@@ -24,6 +26,7 @@ class Settings(BaseSettings):
     URL_TELEBOT_ROOT: str
     UID_PROGRAM_1C: str
     UID_PROGRAM_TELEBOT: str
+    CONNECTION_FILE_PATH: str
 
     MAIN_FOLDER_PATH: str
     LOGS_FOLDER_PATH: str
@@ -40,6 +43,9 @@ class LLM_Settings(BaseSettings):
     CLASS_NAME_SEARCH: str
     CLASS_NAME_PROMT: str
     MODEL: str
+    URL_LLM: str
+    USER_LLM: str
+    PASSWORD_LLM: str
 
     model_config = SettingsConfigDict(env_file="app/.env.llm",
                                     env_file_encoding='utf-8')
