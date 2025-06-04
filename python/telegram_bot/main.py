@@ -1,17 +1,19 @@
 import telebot
+import telebot.types
 import threading
 import uvicorn
-from fastapi import FastAPI
-from config import settings
 import request  # должен быть синхронным!
-from models import SimpleResponse
 import os
 import tempfile
 import mimetypes
-from concurrent.futures import ThreadPoolExecutor
 import time
 import pandas
 import datetime
+
+from fastapi import FastAPI
+from config import settings
+from concurrent.futures import ThreadPoolExecutor
+from models import SimpleResponse
 
 # === Инициализация ===
 app = FastAPI()
@@ -39,7 +41,8 @@ class LogManager:
         if not os.path.exists(self.logs_folder_path):
             os.makedirs(self.logs_folder_path)
         if not os.path.exists(self.logs_file_name):
-            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'message_id', 'user_name', 'request_text', 'response_time', 
+                                             'response_text', 'used_files', 'rating'])
             logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
             return logs    
         # Если файл существует, читаем его    
@@ -47,7 +50,8 @@ class LogManager:
             return pandas.read_csv(self.logs_file_name, encoding='utf-8')
         except Exception as e:
             print(f"Ошибка при чтении логов: {e}")
-            return pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            return pandas.DataFrame(columns=['request_time', 'chat_id', 'message_id', 'user_name', 'request_text', 'response_time', 
+                                             'response_text', 'used_files', 'rating'])
 
     # При $start_pipeline создаем отдельный файл с логами
     def create_log_pipeline(self):
@@ -70,15 +74,18 @@ class LogManager:
         main_log_file_name = "bot_logs.csv"
         self.logs_file_name = os.path.join(self.logs_folder_path, main_log_file_name)
 
-    def log_rating(self, chat_id, rating):
+    def log_rating(self, chat_id, message_id, rating):
         # Убедимся, что колонка rating имеет тип object
         if 'rating' in self.logs.columns and self.logs['rating'].dtype != 'object':
             self.logs['rating'] = self.logs['rating'].astype('object')
 
-        # Обновляем запись в логах, по соответствующему chat_id
+        # Однозначно в логах находим сообщение по chat_id и message_id
         if not self.logs.empty:
-            # Находим последнюю запись в логах для этого chat_id
-            self.logs.loc[self.logs['chat_id'] == chat_id, 'rating'] = rating
+                self.logs.loc[
+                    (self.logs['chat_id'] == chat_id) &
+                    (self.logs['message_id'] == message_id), 'rating'
+                ] = rating
+                self.logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
             
         # Сохраняем логи
         try:
@@ -86,13 +93,14 @@ class LogManager:
         except Exception as e:
             print(f'Ошибка при сохранении логов: {e}')
 
-    def log_interaction(self, request_time, chat_id, user_name, request_text, response_time, response_text, used_files_path, rating=None):
+    def log_interaction(self, request_time, chat_id, message_id, user_name, request_text, response_time, response_text, used_files_path, rating=None):
         used_files_str = ", ".join(os.listdir(used_files_path)) if os.path.exists(used_files_path) else "Папка не создана"
 
         # Создаем запись логов
         new_array = pandas.DataFrame([{
             'request_time'  : request_time,
             'chat_id'       : chat_id,
+            'message_id'    : message_id,
             'user_name'     : user_name,
             'request_text'  : request_text,
             'response_time' : response_time,
@@ -146,29 +154,47 @@ def process_request(data: SimpleResponse):
         response_text = truncate_text(answer)
         sources = getattr(data, "sources", None)
 
-        # Запись в лог
-        logs_manager.log_interaction(
-            request_time    =request_time,
-            chat_id         =chat_id,
-            user_name       =user_name,
-            request_text    =query_text,
-            response_time   =datetime.datetime.now(),
-            response_text   =response_text,
-            used_files_path ="None",
-            rating          =None
-            )
-
         if sources:
             response_text += "\n\nИсточники:\n" + "\n".join([f"- {s}" for s in sources])
 
         try:
-            bot.send_message(
+            msg=bot.send_message(
                 chat_id=chat_id,
                 text=response_text,
                 reply_to_message_id=message_id  # <-- делаем reply
-            )
+                )
+            
+            # Подготовим иконки для сообщения
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.add(
+                telebot.types.InlineKeyboardButton('👍', callback_data=f'rate_{chat_id}_{msg.message_id}_up'),
+                telebot.types.InlineKeyboardButton('👎', callback_data=f'rate_{chat_id}_{msg.message_id}_down')
+                )
+            
+            #Добавим иконки в уже отправленное сообщение
+            bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg.message_id,
+                reply_markup=keyboard
+                )
         except Exception as e:
             print(f"[ERROR] При отправке сообщения: {e}")
+
+        try:
+            # Запись в лог
+            logs_manager.log_interaction(
+                request_time    =request_time,
+                chat_id         =chat_id,
+                message_id      =msg.message_id,
+                user_name       =user_name,
+                request_text    =query_text,
+                response_time   =datetime.datetime.now(),
+                response_text   =response_text,
+                used_files_path ="None",
+                rating          =None
+                )
+        except Exception as e:
+            print(f"[ERROR] При записи логов после отправке сообщения: {e}")
     else:
         print(f"Запрос с ID {request_id} не найден!")
 
@@ -195,7 +221,7 @@ def send_welcome(message):
     )
     bot.send_message(message.chat.id,
                      f"""Привет, {first_name}! Я бот помощник. Я помогу тебе найти нужный ответ.
-Отправь мне файлы в формате PDF или DOCX и задавай по ним вопросы.
+Отправь мне файлы в формате PDF, PPXT или DOCX и задавай по ним вопросы.
 Если хочешь пообщаться не по текстам, то отправь мне сообщение которое начинается с [$]
 Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг""",
                      reply_markup=keyboard)
@@ -368,6 +394,16 @@ def handle_document(message):
     except Exception as e:
         print(f"[ERROR] handle_document: {e}")
 
+
+# === Обработка оценки ответов ===
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))
+def handle_rating(call):
+    parts = call.data.split('_')
+    chat_id = int(parts[1])
+    message_id = int(parts[2])
+    rating = 'up' if parts[3] == 'up' else 'down'
+    logs_manager.log_rating(chat_id, message_id, rating)
+    bot.answer_callback_query(call.id, "Спасибо за вашу оценку!")
 
 # === Вспомогательные функции ===
 def message_to_the_bot(bot_username, text):
