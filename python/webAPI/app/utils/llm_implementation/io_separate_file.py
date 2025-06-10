@@ -77,6 +77,7 @@ class sf_add_keywords_512_chunk:
             case _:
                 print(f"Данный файл не поддерживается {self.file_path}")
                 return []
+
         documents = loader.load()
 
         # Объявляем класс
@@ -253,6 +254,31 @@ class sfDOCXLoader(sfBaseDocumentLoader):
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = "\n".join([line.strip() for line in text.splitlines()])
         return text.strip()
+    
+    #Функция разберает документ на блоки и обрабатывает последовательно 
+    def extract_blocks(self):
+        from docx import Document
+        from docx.table import Table
+
+        doc = Document(self.file_path)
+        blocks = []
+        for child in doc.element.body:
+            tag = child.tag.split('}')[-1]
+            if tag == 'p':
+                texts = [n.text for n in child.iter() if n.tag.endswith('}t') and n.text]
+                text = self.clean_text(''.join(texts))
+                if text:
+                    blocks.append(('paragraph', text))
+            elif tag == 'tbl':
+                tbl = Table(child, doc)
+                rows = []
+                for tbl_row in tbl.rows:
+                    cells = [self.clean_text(cell.text) for cell in tbl_row.cells]
+                    rows.append("\t".join(cells))
+                table_text = "\n".join(rows).strip()
+                if table_text:
+                    blocks.append(('table', table_text))          
+        return blocks
 
     def extract_text(self):
         from docx import Document as DocxDocument
@@ -312,31 +338,14 @@ class sfDOCXLoader(sfBaseDocumentLoader):
 
     def load_documents(self):
         try:
-            if self.loader_type == "python-docx":
-                text = self.extract_text()
-                text = self.clean_text(text)
-                docs = [LangDocument(page_content=text, metadata={"source": os.path.basename(self.file_path)})]
-            elif self.loader_type == "Docx2txtLoader":
-                from langchain_community.document_loaders import Docx2txtLoader
-                loader = Docx2txtLoader(self.file_path)
-                docs = loader.load()
-                for doc in docs:
-                    doc.page_content = self.clean_text(doc.page_content)
-                    doc.metadata["source"] = os.path.basename(self.file_path)
-            elif self.loader_type == "unstructured":
-                from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-                loader = UnstructuredWordDocumentLoader(self.file_path)
-                docs = loader.load()
-                for doc in docs:
-                    doc.page_content = self.clean_text(doc.page_content)
-                    doc.metadata["source"] = os.path.basename(self.file_path)
-            else:
-                raise ValueError(f"Неизвестный тип загрузчика для DOCX: {self.loader_type}")
-            
-            # Извлекаем таблицы всегда одинаково (через python-docx)
-            tables_text, table_metadata = self.extract_tables()
-            if tables_text.strip():
-                docs.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+            docs = []
+            blocks = self.extract_blocks()
+            for kind, text in blocks:
+                metadata = {
+                    "sourse": os.path.basename(self.file_path),
+                    "type": kind
+                }
+                docs.append(LangDocument(page_content=text, metadata=metadata))
         except Exception as e:
             print(f"Ошибка при загрузке документа ({self.loader_type}): {e}")
             import traceback

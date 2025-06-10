@@ -429,7 +429,7 @@ def start_bot():
 
 
 def start_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=8090)
+    uvicorn.run(app, host="0.0.0.0", port=settings.TELEGRAM_PORT)
 
 
 if __name__ == "__main__":
