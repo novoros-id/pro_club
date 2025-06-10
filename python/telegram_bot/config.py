@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     #TELEGRAM_CHAT_ID: str
     API_URL: str
     PROGRAM_UID: str
+    TELEGRAM_PORT: int
 
     DEBUG_TELEGRAM_CHAT_ID: str
     DEBUG_REQUEST_ID: str
