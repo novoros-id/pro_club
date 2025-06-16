@@ -16,6 +16,7 @@ import datetime
 # === Инициализация ===
 app = FastAPI()
 bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
+chat_id = -1002719784241
 
 # Словарь для хранения данных запросов
 request_chat_map = {}
@@ -213,6 +214,12 @@ def help_bot(message):
 @bot.message_handler(content_types=['text'])
 def handle_buttons(message):
     try:
+
+        print("Chat ID:", message.chat.id)
+        if is_user_in_chat(message.from_user.id) == False:
+             bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
+             return
+
         if message.chat.type != 'private':
             me = bot.get_me()
             username = me.username
@@ -375,6 +382,16 @@ def message_to_the_bot(bot_username, text):
     bot_username = bot_username.strip().lower()
     return f"@{bot_username}" in text
 
+def is_user_in_chat(user_id):
+    if not chat_id or chat_id in [0, "0", "", " "]:
+        return True
+    
+    try:
+        chat_member = bot.get_chat_member(chat_id, user_id)
+        return chat_member.status in ['member', 'administrator', 'creator']
+    except Exception as e:
+        print(f"Ошибка при проверке участника: {e}")
+        return False
 
 # === Запуск бота с перезапуском ===
 def start_bot():
