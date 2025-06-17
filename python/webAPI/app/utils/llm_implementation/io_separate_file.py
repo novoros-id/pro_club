@@ -3,7 +3,8 @@
 import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
 
-import os
+import os, re, inspect
+import fitz
 from abc import ABC, abstractmethod
 from langchain.docstore.document import Document as LangDocument
 
@@ -178,11 +179,14 @@ class sfDocumentLoaderFactory:
     def create_loader(file_path: str):
         ext = sfFileTypeDetector.get_file_type(file_path)
         if ext == ".pdf":
-            return sfPDFLoader(file_path, loader_type="py")
+            return sfPDFLoader(file_path)
         elif ext == ".docx":
             return sfDOCXLoader(file_path, loader_type="python-docx")
+        elif ext == ".pptx":  
+            return sfPPTXLoader(file_path)
         else:
             raise ValueError(f"Неподдерживаемый формат файла: {ext}")
+
 
 #  Конвейер обработки документа: загрузка -> разделение на чанки
 class sfDocumentProcessingPipeline:
@@ -354,103 +358,187 @@ class sfDOCXLoader(sfBaseDocumentLoader):
 
         return docs
 
-# Класс для загрузки PDF, объединяющий текст и таблицы
+# Фабрика для обработки PDF, объединяющий текст и таблицы
 class sfPDFLoader(sfBaseDocumentLoader):
-    def __init__(self, file_path: str, loader_type: str):
+    def __init__(
+            self, 
+            file_path: str, 
+            flavor: str = "stream",
+            hf_k: int=5, # Число страниц с начала и конца, на которых ищутся повторяющие строки
+            hf_thr_ratio: float = 0.9 # Минимальная доля этих страниц, на которых строка должна 
+                                        # встретиться чтобы стать кандидатом на удаление
+            ):
         self.file_path = file_path
-        self.loader_type = loader_type
+        self.flavor = flavor # Параметры Camelot: stream | lattice | hybrid
+        self.k = hf_k
+        self.thr = hf_thr_ratio
     
-    def load_documents(self):
-        # Выбор загрузчика для файла
-        if self.loader_type == "py":
-            from langchain_community.document_loaders import PyPDFLoader
-            loader = PyPDFLoader(self.file_path)
-        elif self.loader_type == "unstructured":
-            from langchain_community.document_loaders import UnstructuredPDFLoader
-            loader = UnstructuredPDFLoader(self.file_path)
-        elif self.loader_type == "plumber":
-            from langchain_community.document_loaders import PDFMinerLoader
-            loader = PDFMinerLoader(self.file_path)        
-        else:
-            raise ValueError(f"Неизвестный тип загрузчика для PDF: {self.loader_type}")
-        
-        documents = loader.load() 
+    # Очищаем текст
+    def _clean(self, text: str) -> str:
+        invisible = ["\u200b", "\ufeff", "\xa0", "\x0c"]
+        for ch in invisible:
+            text = text.replace(ch, " " if ch == "\xa0" else "")
+        text = re.sub(r"[\t ]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
 
-        # Обновляем метаданные, чтобы source содержал только имя файла
-        file_name = os.path.basename(self.file_path)
-        for doc in documents:
-            doc.metadata["source"] = file_name
+    # Для поиска и исключения таблиц из обработки текста
+    def _bbox_to_rect(self, bbox: tuple[float, float, float, float],
+                      pad: float = 5) -> "fitz.Rect":
+        x1, y1, x2, y2 = bbox 
+        rect= fitz.Rect(x1, y1, x2, y2)
+        if hasattr(rect, "inflate"):
+            return rect.inflate(pad, pad)
+        # параметр pad увеличивает зону обработки вокруг таблицы. Параметр в указан pt (один pt ~4.2 мм)
+        return fitz.Rect(x1 - pad, y1 - pad, x2 + pad, y2 + pad)
+    
+    # Унификация строк перед сравнением
+    @staticmethod
+    def _norm(s: str) -> str:
+        s = s.lower()
+        s = re.sub(r"\d{1,4}[./-]\d{1,2}[./-]?\d{0,4}", "", s)
+        s = re.sub(r"\d+", "", s)
+        s = re.sub(r"\s+", " ", s)
+        return s.strip()
+    
+    # Попытка исклюить колонтитулы (похоже пока безуспешно)
+    def _collect_hf_candidates(self, pdf: fitz.Document) -> tuple[set[str], set[str]]:
+        #Возвращает два множества строк: headers, footers
+        k = self.k
+        thr_ratio = self.thr
+        head_cnt: dict[str, int] = {} 
+        foot_cnt: dict[str, int] = {}
 
-        # Дополнительно извлекаем таблицы
-        tables_text, table_metadata = self.extract_tables()
-        if tables_text.strip():
-            documents.append(LangDocument(page_content=tables_text, metadata=table_metadata))
+        for page in pdf:
+            blocks = sorted(page.get_text("blocks"), key=lambda b: b[1])
+            top_lines = [blocks[i][4].strip() for i in range(min(k, len(blocks)))]
+            bot_lines = [blocks[-(i + 1)][4].strip() for i in range(min(k, len(blocks)))]
 
-        return documents
+            for ln in top_lines:
+                key = self._norm(ln)
+                if key:
+                    head_cnt[key] = head_cnt.get(key, 0) + 1
+            
+            for ln in bot_lines:
+                key = self._norm(ln)
+                if key:
+                    foot_cnt[key] = foot_cnt.get(key, 0) + 1
 
-    def extract_tables(self):
-        extracted_tables = []
-        metadata = {"source": os.path.basename(self.file_path)}
+        thresh = max(1, int(len(pdf) * thr_ratio)) #50% страниц по умолчанию 
 
-        import fitz  # PyMuPDF
-        try:
-            doc = fitz.open(self.file_path)
-        except Exception as e:
-            print(f"Ошибка открытия PDF: {e}")
-            return ""
-        
-        for page in doc:
-            page_num = page.number + 1
-            analysis = self.analyze_page(page)
-            if analysis["contains_tables"]:
-                table_text = self.try_extract_table(page, page_num)
-                if table_text:
-                    extracted_tables.append(table_text)
-        return "\n\n".join(extracted_tables) if extracted_tables else "", metadata        
+        headers_set = {s for s, c in head_cnt.items() if c >= thresh}
+        footers_set = {s for s, c in foot_cnt.items() if c >= thresh}
 
-
-    def analyze_page(self, page):
-        # Анализируем есть ли на странице таблица
-        analysis = {"contains_tables": False}
-        try:
-            tables = page.find_tables()
-            if tables.tables: 
-                analysis["contains_tables"] = True
-        except Exception as e:
-            print(f"Анализ страницы {page} завершился с ошибкой: {e}")
-        return analysis
-
-    def try_extract_table(self, page, page_num):
+        return headers_set, footers_set
+    
+    def load_documents(self) -> list[LangDocument]:
         import camelot
-        table_text_candidates = {}
 
-        try:
-            page_dict = page.get_text("dict")
-            contains_lines = any("lines" in block for block in page_dict.get("blocks", []))
-            flavors = ["stream", "hybrid"] if contains_lines else ["stream"]
+        docs: list[LangDocument] = []
 
-            for flavor in flavors:
-                try:
-                    tables = camelot.read_pdf(self.file_path, pages=str(page_num), flavor=flavor)
-                    if tables.n > 0:
-                        quality = sum(len(table.df) for table in tables)
-                        table_text = "\n".join([table.df.to_csv(index=False) for table in tables])
-                        table_text_candidates[flavor] = (quality, table_text)
-                except Exception as e:
-                    print(f"Flavor '{flavor}' не сработал на странице {page_num}: {e}")
+        pdf = fitz.open(self.file_path)
+        file_name = os.path.basename(self.file_path)
 
-            if not table_text_candidates:
-                print(f"Таблицы не извлечены на странице {page_num}.")
-                self._cache[page_num] = ""
-                return ""
-                        
-            best_flavor = max(table_text_candidates, key=lambda f: table_text_candidates[f][0])
-            best_quality, best_text = table_text_candidates[best_flavor]
-            print(f"Выбран режим '{best_flavor}' для страницы {page_num} с качеством {best_quality}.")
-            return best_text
-        except Exception as e:
-            print(f"Ошибка извлечения таблиц: {e}")
-            return ""
+        #1. Динамический поиск повторяющихся циклов
+        hdr_set, ftr_set = self._collect_hf_candidates(pdf)
+
+        #2. Идем основным циклом
+        for page in pdf:
+            page_id = page.number + 1
+
+            #1. Ищем таблицы на странице
+            try:
+                tables = camelot.read_pdf(
+                    self.file_path,
+                    pages=str(page_id),
+                    flavor=self.flavor,
+                    strip_text="\n",
+                    split_text=True,
+                    edge_tol=200, #"растягиваем" границы до +200pt
+                    row_tol=5,  #объединяем строки, если центы вертикально ближе 5 pt
+                )
+            except Exception as e:
+                print(f"[Camelot] опибка при разборке {page_id}: {e}")
+                tables = []
+            
+            #Собираем bbox всех таблиц, чтобы исключить их из текста
+            tbl_rects: list[fitz.Rect] = []
+            for t in tables:
+                tbl_rects.append(self._bbox_to_rect(t._bbox))
+
+            
+            #2. Извлекаем блоки с текстом, не перекрывающиеся таблицами
+            try:
+                blocks = page.get_text("blocks")
+                text_parts: list[str] = []
+                for x0, y0, x1, y1, txt, *_ in blocks:
+                    rect = fitz.Rect(x0, y0, x1, y1)
+                    if not txt.strip():
+                        continue
+                    if page_id != 1 and any(
+                        self._norm(line) in hdr_set or self._norm(line) in ftr_set
+                        for line in txt.splitlines()
+                        if line.strip()
+                    ):
+                        continue
+                    text_parts.append(txt)
+            except Exception as e:
+                print(e)
+
+            if text_parts:
+                para_text = self._clean("\n".join(text_parts))
+                is_guess = ("\t" in para_text and para_text.count("\t") >= 3) \
+                            or ("..." in para_text and para_text.count("...") >= 5)
+                docs.append(
+                    LangDocument(
+                        page_content=para_text,
+                        metadata={
+                            "source": file_name,
+                            "type": "table_guess" if is_guess else "paragraph",
+                            "page": page_id,
+                        },
+                    )
+                )
+
+            #3. Добавляем таблицы в том порядкеб как они идут в тексте
+            tables = tables or []
+            table_order = sorted(zip(tbl_rects, tables), key=lambda p: p[0].y0)
+            for rect, table in table_order:
+                if table.df.shape[0] < 3 or table.df.shape[1] < 2:
+                    continue
+                first_cell_norm = self._norm(table.df.iloc[0, 0])
+
+                tsv = "\n".join(table.df.apply(lambda r: "\t".join(r), axis=1))
+                docs.append(
+                    LangDocument(
+                        page_content=tsv,
+                        metadata={
+                            "source": file_name,
+                            "type": "table",
+                            "page": page_id,
+                        },
+                    )
+                )
+
+        pdf.close()
+        # Ниже код для дебага, смотреть какие данные уходят в БД
+        # for i, d in enumerate(docs, 1):
+        #     meta = d.metadata
+        #     preview = d.page_content.replace("\n", " ")[:120]
+        #     print(f"{i:02d}. {meta['type']:8} | стр.{meta['page']:>2} | {preview}…")        
+        return docs
+
+# Фабрика для обработки PPTX
+class sfPPTXLoader(sfBaseDocumentLoader):
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+
+    def load_documents(self):
+        from langchain_community.document_loaders import UnstructuredPowerPointLoader
+
+        docs = []
+        docs = UnstructuredPowerPointLoader(self.file_path)
+        return docs
 
 class get_keywords:
     
