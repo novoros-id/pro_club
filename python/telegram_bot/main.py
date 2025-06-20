@@ -14,11 +14,13 @@ from fastapi import FastAPI
 from config import settings
 from concurrent.futures import ThreadPoolExecutor
 from models import SimpleResponse
+from pipeline import TestPipelineRunner, update_prime_file
+import rag_metrick
 
 # === Инициализация ===
 app = FastAPI()
 bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
-chat_id = -1002719784241
+chat_id = 0
 
 # Словарь для хранения данных запросов
 request_chat_map = {}
@@ -235,6 +237,90 @@ def help_bot(message):
                      f'1️⃣  {FILES_LIST_BUTTON} - позволяет получить перечень загруженных файлов\n'
                      f'2️⃣  {DELETE_FILES_BUTTON} - выполняет полное удаление всех загруженных ранее файлов')
 
+@bot.message_handler(commands=['start_pipeline'])
+def handle_start_pipeline(message):
+    chat_id = message.chat.id
+    zakroma_folder = settings.ZAKROMA_FOLDER
+    task_folder = settings.TASK_FOLDER
+    prime_path = os.path.join(task_folder, "prime.xlsx")
+
+    # 1. Подготовка pipeline
+    pipeline = TestPipelineRunner(zakroma_folder=zakroma_folder, task_folder=task_folder)
+    result = pipeline.prepare(prime_path=prime_path)
+
+    # 2. Сообщаем пользователю ход пайплайна
+    for step in (result.steps or []):
+        bot.send_message(chat_id, step)
+    if result.error:
+        bot.send_message(chat_id, f"Ошибка при подготовке pipeline: {result.error}")
+        return
+
+    # 3. Создаём отдельный лог-файл для теста
+    logs_manager.create_log_pipeline()
+
+    # 4. Запускаем цикл: "вопрос — запрос — ответ — лог"
+    bot.send_message(chat_id, "Тестовый pipeline запущен! Ответы будут поступать по мере готовности.")
+    for idx, (question, source) in enumerate(zip(result.questions, result.sources), 1):
+        truncated_question = truncate_text(question)
+        bot.send_message(chat_id, f"Вопрос {idx}: {truncated_question}\nФайл: {source}")
+
+        # Готовим структуру запроса как в остальном коде
+        username = "test_user_pipeline"
+        simpleRequest = request.prepare_request(username, truncated_question)
+        request_data = {
+            "chat_id": chat_id,
+            "query_text": truncated_question,
+            "request_uid": simpleRequest.code_uid.request_uid,
+            "status": "processing",
+            "timestamp": datetime.datetime.now(),
+            "response": None,
+            "files": [source],
+            "message_id": None,  # будет заполнено после получения ответа
+            "username": username
+        }
+        request_chat_map[simpleRequest.code_uid.request_uid] = request_data
+
+        # Отправляем запрос (асинхронно)
+        executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
+        # Если нужно ждать ответа и логировать — обработка идёт через /process
+
+        # Сообщаем пользователю прогресс
+        # пока не понял как сделать
+        # bot.send_message(chat_id, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {truncated_response}")
+
+    # После завершения цикла — финальные сообщения:
+    bot.send_message(chat_id, "Все вопросы успешно обработаны. Логи записаны.")
+    bot.send_message(chat_id, "Запускаю подсчет метрик.")
+
+    # Пути к файлам и папкам
+    prime_file_path = os.path.join(settings.TASK_FOLDER, "prime.xlsx")
+    logs_folder_path_pipeline = settings.LOG_FOLDER_PIPELINE      # настройка должна быть в config
+    logs_file_name_pipeline = f"pipeline_{chat_id}_{datetime.datetime.now():%Y%m%d_%H%M%S}.log"
+    log_path_file_name = os.path.join(logs_folder_path_pipeline, logs_file_name_pipeline)
+
+    # Запуск подсчета метрик
+    file_metrick_ = metrick_start(
+        chatID=chat_id,
+        task_for_test_folder=settings.TASK_FOLDER,
+        log_path_file_name=log_path_file_name,
+        prime_file_path=prime_file_path
+    )
+
+    # Отправляем файл пользователю
+    with open(file_metrick_, 'rb') as doc:
+        bot.send_document(chat_id, doc)
+
+    # Функция обработки RAG метрик
+    def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
+        metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
+        try:
+            file_metrick = metrick.gmetrics()
+            bot.send_message(chatID, f'Файл метрик: {file_metrick}')
+            return file_metrick
+        except:
+            file_metrick = log_file_name
+            bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
+            return file_metrick
 
 # === Обработка текстовых сообщений ===
 @bot.message_handler(content_types=['text'])
@@ -364,43 +450,82 @@ def handle_document(message):
         file_name = message.document.file_name
 
         if file_name == "prime.xlsx":
-            pass  # todo реализовать позже
+            try:
+                print ("Загрузка файла prime.xlsx")
+                # Загружаем файл
+                file_id = message.document.file_id
+                file_info = bot.get_file(file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+
+                # Сохраняем временный файл
+                temp_file_path = os.path.join(settings.TEMP_TASK_FOLDER, file_name)
+                with open(temp_file_path, 'wb') as new_file:
+                    new_file.write(downloaded_file)
+                msg = update_prime_file(
+                    temp_file_path=temp_file_path,
+                    task_folder=settings.TASK_FOLDER,
+                    zakroma_folder=settings.ZAKROMA_FOLDER
+                )
+                bot.send_message(chatID, msg)
+
+                prime_path = os.path.join(settings.TASK_FOLDER, 'prime.xlsx')
+                df = pandas.read_excel(prime_path)
+                required_files = list(df["Source"].unique())
+                test_username = "test_user_pipeline"
+                for src_file in required_files:
+                    zakroma_path = os.path.join(settings.ZAKROMA_FOLDER, src_file)
+                    if not os.path.exists(zakroma_path):
+                        bot.send_message(chatID, f"Файл {src_file} отсутствует в zakroma_folder!")
+                        continue
+                    with open(zakroma_path, "rb") as f:
+                        file_bytes = f.read()
+                    upload_document(chatID, src_file, file_bytes, test_username, bot, request, request_chat_map)
+            except Exception as e:
+                bot.send_message(chatID, e)
+            return
+        
         elif settings.TELEGRAM_JUST_QUESTIONS:
             bot.send_message(chatID, "Извините, включен ограниченный режим, нельзя добавлять файлы!")
+
         else:
+            file_id = message.document.file_id
+            file_info = bot.get_file(file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
-                file_path = temp_file.name
-                temp_file.write(downloaded_file)
-                mime_type, _ = mimetypes.guess_type(file_path)
-                if mime_type is None:
-                    mime_type = 'application/octet-stream'
-
-                with open(file_path, 'rb') as file:
-                    files = [('files', (file_name, file.read(), mime_type))]
-
-            request_form = request.prepare_request(username, "")
-            request_data = {
-                "chat_id": chatID,
-                "query_text": "",
-                "request_uid": request_form.code_uid.request_uid,
-                "status": "processing",
-                "timestamp": datetime.datetime.now(),
-                "response": None,
-                "files": [file_name],
-                "message_id": message.message_id,
-                "username": username
-            }
-            request_chat_map[request_form.code_uid.request_uid] = request_data
-            response = request.send_file_request(files, request_form, '/api/v1/files/upload')
-            if response.status_code != 200:
-                bot.send_message(message.chat.id, f"Ошибка при загрузке файла '{file_name}': {response.text}")
-
-            os.remove(file_path)
-
+            upload_document(chatID, file_name, downloaded_file, username, bot, request, request_chat_map)
     except Exception as e:
         print(f"[ERROR] handle_document: {e}")
 
+def upload_document(chatID, file_name, downloaded_file, username, bot, request, request_chat_map, message_id=None):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+        file_path = temp_file.name
+        temp_file.write(downloaded_file)
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type is None:
+            mime_type = 'application/octet-stream'
+
+        with open(file_path, 'rb') as file:
+            files = [('files', (file_name, file.read(), mime_type))]
+
+        request_form = request.prepare_request(username, "")
+        request_data = {
+            "chat_id": chatID,
+            "query_text": "",
+            "request_uid": request_form.code_uid.request_uid,
+            "status": "processing",
+            "timestamp": datetime.datetime.now(),
+            "response": None,
+            "files": [file_name],
+            "message_id": message_id,
+            "username": username
+        }
+        print(f"Перед записью: {request_form.code_uid.request_uid} username={request_data['username']}") 
+        request_chat_map[request_form.code_uid.request_uid] = request_data
+        print(f"После записи: {request_chat_map[request_form.code_uid.request_uid]['username']}")
+        response = request.send_file_request(files, request_form, '/api/v1/files/upload')
+        if response.status_code != 200:
+            bot.send_message(chatID, f"Ошибка при загрузке файла '{file_name}': {response.text}")
+
+        os.remove(file_path)
 
 # === Обработка оценки ответов ===
 @bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))

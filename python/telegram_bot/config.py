@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     TELEGRAM_USER: str
     TELEGRAM_JUST_QUESTIONS: bool
     LOG_FOLDER: str
+    ZAKROMA_FOLDER: str
+    TASK_FOLDER: str
+    TEMP_TASK_FOLDER: str
     #TELEGRAM_CHAT_ID: str
     API_URL: str
     PROGRAM_UID: str
