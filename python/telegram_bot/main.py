@@ -18,7 +18,7 @@ from models import SimpleResponse
 # === Инициализация ===
 app = FastAPI()
 bot = telebot.TeleBot(settings.TELEGRAM_TOKEN)
-chat_id = -1002719784241
+chat_id = 0
 
 # Словарь для хранения данных запросов
 request_chat_map = {}
@@ -242,9 +242,9 @@ def handle_buttons(message):
     try:
 
         print("Chat ID:", message.chat.id)
-        if is_user_in_chat(message.from_user.id) == False:
-             bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
-             return
+
+        telegram_user_id = message.from_user.id
+        telegram_username = message.from_user.username
 
         if message.chat.type != 'private':
             me = bot.get_me()
@@ -252,8 +252,14 @@ def handle_buttons(message):
             if not message_to_the_bot(username, message.text):
                 return
             else:
+                if is_user_in_chat(telegram_user_id) == False:
+                    bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
+                    return
                 username = settings.TELEGRAM_USER    
         elif settings.TELEGRAM_JUST_QUESTIONS:
+            if is_user_in_chat(telegram_user_id) == False:
+                    bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
+                    return
             username = settings.TELEGRAM_USER
         else:
             username = message.from_user.username
@@ -272,7 +278,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": telegram_username
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/files/list')
@@ -297,7 +303,7 @@ def handle_buttons(message):
                     "response": None,
                     "files": [],
                     "message_id": message.message_id,
-                    "username": username
+                    "username": telegram_username
                 }
                 request_chat_map[simpleRequest.code_uid.request_uid] = request_data
                 executor.submit(request.send_request, simpleRequest, '/api/v1/files/delete')
@@ -317,7 +323,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": telegram_username
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/free_answer')
@@ -334,7 +340,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": telegram_username
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
