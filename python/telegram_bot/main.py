@@ -266,6 +266,8 @@ def handle_buttons(message):
 
         text = message.text.strip()
         chatID = message.chat.id
+        # Получаем ID топика (подгруппы), если оно там
+        thread_id = message.message_thread_id
 
         if text == FILES_LIST_BUTTON:
             simpleRequest = request.prepare_request(username, text)
@@ -312,7 +314,7 @@ def handle_buttons(message):
             bot.send_message(chatID, 'Извините, необходимо указать запрос!')
 
         elif text.count('$') == 1:
-            bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...')
+            bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...', message_thread_id=thread_id)
             simpleRequest = request.prepare_request(username, text)
             request_data = {
                 "chat_id": chatID,
@@ -329,7 +331,7 @@ def handle_buttons(message):
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/free_answer')
 
         else:
-            bot.send_message(chatID, 'Секунду, думаю...')
+            bot.send_message(chatID, 'Секунду, думаю...', message_thread_id=thread_id)
             simpleRequest = request.prepare_request(username, text)
             request_data = {
                 "chat_id": chatID,
