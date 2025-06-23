@@ -26,7 +26,7 @@ llm = OllamaLLM(
                 model=model_llm, temperature = 0.1, base_url=url_llm, client_kwargs={'headers': headers})
 
 class rag_metrick:
-    def init(self, logs_folder_path, logs_path_file_name, prime_path_file_name):
+    def __init__(self, logs_folder_path, logs_path_file_name, prime_path_file_name):
         self.logs_folder_path = logs_folder_path
         self.logs_path_file_name = logs_path_file_name
         self.prime_path_file_name = prime_path_file_name
@@ -75,5 +75,5 @@ class rag_metrick:
                 new_array = new_array.dropna(axis=1, how='all')
                 metrics_file = pandas.concat([metrics_file.dropna(axis=1, how='all'), new_array], ignore_index=True)
                 metrics_file.to_csv(metrics_file_name, index=False, encoding='utf-8')
-
+    
         return metrics_file_name

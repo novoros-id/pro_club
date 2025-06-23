@@ -28,6 +28,9 @@ request_chat_map = {}
 # История запросов по chat_id
 user_history = {}
 
+# Словарь для хранения состояния пайплайна
+pipeline_state = {} 
+
 # Объект для выполнения фоновых задач
 executor = ThreadPoolExecutor(max_workers=3)
 
@@ -35,8 +38,9 @@ max_telegram_message_length = 3800
 
 # ---= КЛАСС ДЛЯ УПРАВЛЕНИЯ ЛОГАМИ =---
 class LogManager:
-    def __init__(self, logs_folder_path, logs_file_name):
+    def __init__(self, logs_folder_path, logs_folder_pipeline, logs_file_name):
         self.logs_folder_path = logs_folder_path
+        self.logs_folder_pipeline = logs_folder_pipeline
         self.logs_file_name = os.path.join(logs_folder_path, logs_file_name)
         self.logs = self._initialize_logs()
 
@@ -60,11 +64,11 @@ class LogManager:
     def create_log_pipeline(self):
         current_time = datetime.datetime.now()
         log_file_name = f'test_pipeline_{current_time.strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        log_file_path = os.path.join(self.logs_folder_path, log_file_name)
+        log_file_path = os.path.join(self.logs_folder_pipeline, log_file_name)
         
         try:
-            logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
-            logs.to_csv(self.logs_file_name, index=False, encoding='utf-8')
+            self.logs = pandas.DataFrame(columns=['request_time', 'chat_id', 'user_name', 'request_text', 'response_time', 'response_text', 'used_files', 'rating'])
+            self.logs.to_csv(log_file_path, index=False, encoding='utf-8')
             self.logs_file_name = log_file_path
         except Exception as e:
             print(f'Ошибка при создании файла тестовых логов: {e}')
@@ -76,6 +80,7 @@ class LogManager:
     def switch_to_main_logs(self):
         main_log_file_name = "bot_logs.csv"
         self.logs_file_name = os.path.join(self.logs_folder_path, main_log_file_name)
+        self.logs = self._initialize_logs
 
     def log_rating(self, chat_id, message_id, rating):
         # Убедимся, что колонка rating имеет тип object
@@ -130,8 +135,68 @@ def truncate_text(text, max_length=max_telegram_message_length):
 def process_request(data: SimpleResponse):
     request_id = data.code_uid.request_uid
     entry = request_chat_map.get(request_id)
+    is_pipeline = entry.get("is_pipeline", False)
 
-    if entry:
+    if entry and is_pipeline:
+        chat_id = entry["chat_id"]
+        answer = data.answer
+        query_text = entry["query_text"]
+        message_id = entry["message_id"]
+        user_name = entry["username"]
+        request_time = entry["timestamp"]
+
+        # Сохраняем ответ и обновляем статус
+        entry["response"] = answer
+        entry["status"] = "completed"
+
+        # Добавляем в историю пользователя
+        if chat_id not in user_history:
+            user_history[chat_id] = []
+        user_history[chat_id].append({
+            "request_uid": request_id,
+            "query": query_text,
+            "response": answer,
+            "timestamp": time.time(),
+            "sources": getattr(data, "sources", [])
+        })
+        # Формируем текст ответа
+        response_text = truncate_text(answer)
+        sources = getattr(data, "sources", None)
+
+        if sources:
+            response_text += "\n\nИсточники:\n" + "\n".join([f"- {s}" for s in sources])
+
+        try:
+            msg=bot.send_message(
+                chat_id=chat_id,
+                text=response_text,
+                reply_to_message_id=message_id  # <-- делаем reply
+                )
+        except Exception as e:
+            print(f"[ERROR] При отправке сообщения: {e}")
+        state = pipeline_state.get(chat_id)
+        if state:
+            # Увеличиваем индекс для следующего вопроса
+            idx_question = state['idx'] + 1
+            total = len(state['questions'])
+            bot.send_message(chat_id, f"Обработано: {idx_question} из {total} вопросов.")
+
+        try:
+            # Запись в лог
+            logs_manager.log_interaction(
+                request_time    =request_time,
+                chat_id         =chat_id,
+                message_id      =msg.message_id,
+                user_name       =user_name,
+                request_text    =query_text,
+                response_time   =datetime.datetime.now(),
+                response_text   =response_text,
+                used_files_path ="None",
+                rating          =None
+                )
+        except Exception as e:
+            print(f"[ERROR] При записи логов после отправке сообщения: {e}")
+    elif entry:
         chat_id = entry["chat_id"]
         answer = data.answer
         query_text = entry["query_text"]
@@ -201,10 +266,17 @@ def process_request(data: SimpleResponse):
     else:
         print(f"Запрос с ID {request_id} не найден!")
 
+    state = pipeline_state.get(chat_id)
+    if state and state['idx'] < len(state['questions']):
+        # Увеличиваем индекс для следующего вопроса
+        state['idx'] += 1
+        send_next_pipeline_question(chat_id)
+
     return {"status": "ok"}
 
 logs_folder_path = settings.LOG_FOLDER
-logs_manager = LogManager(logs_folder_path, 'bot_logs.csv')
+logs_folder_pipeline = settings.LOG_FOLDER_PIPELINE
+logs_manager = LogManager(logs_folder_path, logs_folder_pipeline, 'bot_logs.csv')
 
 # === Кнопки ===
 HELP_BUTTON = 'Помощь'
@@ -242,11 +314,20 @@ def handle_start_pipeline(message):
     chat_id = message.chat.id
     zakroma_folder = settings.ZAKROMA_FOLDER
     task_folder = settings.TASK_FOLDER
+    test_user_folder = settings.TEMP_TASK_FOLDER
     prime_path = os.path.join(task_folder, "prime.xlsx")
 
+
     # 1. Подготовка pipeline
-    pipeline = TestPipelineRunner(zakroma_folder=zakroma_folder, task_folder=task_folder)
+    pipeline = TestPipelineRunner(zakroma_folder=zakroma_folder, task_folder=task_folder, test_user_folder=test_user_folder)
     result = pipeline.prepare(prime_path=prime_path)
+
+    pipeline_state[chat_id] = {
+        "questions": result.questions,
+        "sources": result.sources,
+        "idx": 0,
+        "start_time": time.time()
+    }
 
     # 2. Сообщаем пользователю ход пайплайна
     for step in (result.steps or []):
@@ -254,73 +335,15 @@ def handle_start_pipeline(message):
     if result.error:
         bot.send_message(chat_id, f"Ошибка при подготовке pipeline: {result.error}")
         return
-
+    
     # 3. Создаём отдельный лог-файл для теста
     logs_manager.create_log_pipeline()
 
     # 4. Запускаем цикл: "вопрос — запрос — ответ — лог"
     bot.send_message(chat_id, "Тестовый pipeline запущен! Ответы будут поступать по мере готовности.")
-    for idx, (question, source) in enumerate(zip(result.questions, result.sources), 1):
-        truncated_question = truncate_text(question)
-        bot.send_message(chat_id, f"Вопрос {idx}: {truncated_question}\nФайл: {source}")
+    # Отправляем вопросы по очереди
+    send_next_pipeline_question(chat_id)
 
-        # Готовим структуру запроса как в остальном коде
-        username = "test_user_pipeline"
-        simpleRequest = request.prepare_request(username, truncated_question)
-        request_data = {
-            "chat_id": chat_id,
-            "query_text": truncated_question,
-            "request_uid": simpleRequest.code_uid.request_uid,
-            "status": "processing",
-            "timestamp": datetime.datetime.now(),
-            "response": None,
-            "files": [source],
-            "message_id": None,  # будет заполнено после получения ответа
-            "username": username
-        }
-        request_chat_map[simpleRequest.code_uid.request_uid] = request_data
-
-        # Отправляем запрос (асинхронно)
-        executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
-        # Если нужно ждать ответа и логировать — обработка идёт через /process
-
-        # Сообщаем пользователю прогресс
-        # пока не понял как сделать
-        # bot.send_message(chat_id, f"Получен ответ на {idx} из {total_questions} вопросов. Ответ: {truncated_response}")
-
-    # После завершения цикла — финальные сообщения:
-    bot.send_message(chat_id, "Все вопросы успешно обработаны. Логи записаны.")
-    bot.send_message(chat_id, "Запускаю подсчет метрик.")
-
-    # Пути к файлам и папкам
-    prime_file_path = os.path.join(settings.TASK_FOLDER, "prime.xlsx")
-    logs_folder_path_pipeline = settings.LOG_FOLDER_PIPELINE      # настройка должна быть в config
-    logs_file_name_pipeline = f"pipeline_{chat_id}_{datetime.datetime.now():%Y%m%d_%H%M%S}.log"
-    log_path_file_name = os.path.join(logs_folder_path_pipeline, logs_file_name_pipeline)
-
-    # Запуск подсчета метрик
-    file_metrick_ = metrick_start(
-        chatID=chat_id,
-        task_for_test_folder=settings.TASK_FOLDER,
-        log_path_file_name=log_path_file_name,
-        prime_file_path=prime_file_path
-    )
-
-    # Отправляем файл пользователю
-    with open(file_metrick_, 'rb') as doc:
-        bot.send_document(chat_id, doc)
-
-    # Функция обработки RAG метрик
-    def metrick_start (chatID, task_for_test_folder, log_file_name, prime_file_path):
-        metrick = rag_metrick.rag_metrick(task_for_test_folder, log_file_name, prime_file_path)
-        try:
-            file_metrick = metrick.gmetrics()
-            bot.send_message(chatID, f'Файл метрик: {file_metrick}')
-            return file_metrick
-        except:
-            file_metrick = log_file_name
-            bot.send_message(chatID, f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
-            return file_metrick
 
 # === Обработка текстовых сообщений ===
 @bot.message_handler(content_types=['text'])
@@ -358,7 +381,8 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": username,
+                "is_pipeline": False
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/files/list')
@@ -383,7 +407,8 @@ def handle_buttons(message):
                     "response": None,
                     "files": [],
                     "message_id": message.message_id,
-                    "username": username
+                    "username": username,
+                    "is_pipeline": False
                 }
                 request_chat_map[simpleRequest.code_uid.request_uid] = request_data
                 executor.submit(request.send_request, simpleRequest, '/api/v1/files/delete')
@@ -420,7 +445,8 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": username,
+                "is_pipeline": False
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
@@ -516,11 +542,10 @@ def upload_document(chatID, file_name, downloaded_file, username, bot, request, 
             "response": None,
             "files": [file_name],
             "message_id": message_id,
-            "username": username
+            "username": username,
+            "is_pipeline": False
         }
-        print(f"Перед записью: {request_form.code_uid.request_uid} username={request_data['username']}") 
         request_chat_map[request_form.code_uid.request_uid] = request_data
-        print(f"После записи: {request_chat_map[request_form.code_uid.request_uid]['username']}")
         response = request.send_file_request(files, request_form, '/api/v1/files/upload')
         if response.status_code != 200:
             bot.send_message(chatID, f"Ошибка при загрузке файла '{file_name}': {response.text}")
@@ -553,6 +578,74 @@ def is_user_in_chat(user_id):
     except Exception as e:
         print(f"Ошибка при проверке участника: {e}")
         return False
+
+ # Функция для отправки следующего вопроса в пайплайне
+def send_next_pipeline_question(chat_id):
+    state = pipeline_state.get(chat_id)
+    if not state:
+        return
+
+    idx = state['idx']
+    questions = state['questions']
+    sources = state['sources']
+
+    # Проверяем, есть ли еще вопросы, если нет, завершаем пайплайн
+    if idx >= len(questions):
+        bot.send_message(chat_id, "Все вопросы успешно обработаны. Логи записаны.")
+        # Отправляем сообщение о завершении
+        bot.send_message(chat_id, "Запускаю подсчет метрик.")
+        # Метрики
+        # Пути к файлам и папкам
+        logs_folder_path = settings.LOG_FOLDER_PIPELINE      # настройка в config
+        logs_file_name_pipeline = logs_manager.logs_file_name  # имя файла логов для пайплайна
+        prime_path_file_name = os.path.join(settings.TASK_FOLDER, "prime.xlsx")
+        # Запускаем метрики
+        file_metrick_ = metrick_start(
+            logs_folder_path=logs_folder_path,
+            logs_path_file_name=logs_file_name_pipeline,
+            prime_path_file_name=prime_path_file_name
+        )
+
+        # Отправляем файл пользователю
+        with open(file_metrick_, 'rb') as doc:
+            bot.send_document(chat_id, doc)
+        # Переключаем на глобальный лог
+        logs_manager.switch_to_main_logs()
+        return
+
+    question = questions[idx]
+    source = sources[idx]
+    truncated_question = truncate_text(question)
+
+    bot.send_message(chat_id, f"Обрабатываю вопрос №{idx+1}: {truncated_question}\nФайл: {source}")
+
+    username = "test_user_pipeline"
+    simpleRequest = request.prepare_request(username, truncated_question)
+    request_data = {
+        "chat_id": chat_id,
+        "query_text": truncated_question,
+        "request_uid": simpleRequest.code_uid.request_uid,
+        "status": "processing",
+        "timestamp": datetime.datetime.now(),
+        "response": None,
+        "files": [source],
+        "message_id": None,
+        "username": username,
+        "is_pipeline": True
+    }
+    request_chat_map[simpleRequest.code_uid.request_uid] = request_data
+
+    executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
+
+# Функция обработки RAG метрик
+def metrick_start (logs_folder_path, logs_path_file_name, prime_path_file_name):
+    metrick = rag_metrick.rag_metrick(logs_folder_path, logs_path_file_name, prime_path_file_name)
+    try:
+        file_metrick = metrick.gmetrics()
+    except:
+        file_metrick = prime_path_file_name
+        print(f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
+    return file_metrick
 
 # === Запуск бота с перезапуском ===
 def start_bot():

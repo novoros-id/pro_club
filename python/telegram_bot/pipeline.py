@@ -14,9 +14,10 @@ class PipelineResult:
         self.error = error
 
 class TestPipelineRunner:
-    def __init__(self, zakroma_folder: str, task_folder: str):
+    def __init__(self, zakroma_folder: str, task_folder: str, test_user_folder: str):
         self.zakroma_folder = zakroma_folder
         self.task_folder = task_folder
+        self.test_user_folder = test_user_folder
 
     def prepare(self, prime_path: str) -> PipelineResult:
         steps = []
@@ -26,19 +27,16 @@ class TestPipelineRunner:
                 raise FileNotFoundError(f'Файл prime.xls не найден по пути: {prime_path}')
             
             prime_df = validate_prime_xlsx(prime_path)           
-            steps.append('prime.xls прошел все проверки')
         except Exception as e:
             print(f'Ошибка на этапе чтения файла: {e}')
         
             # 2. Подготовка test_user_pipeline и файлов
         try:
             test_username = 'test_user_pipeline'
-            user_input_folder = os.path.join(self.task_folder, test_username)
+            user_input_folder = os.path.join(self.test_user_folder, test_username)
             if not os.path.exists(user_input_folder):
                 os.makedirs(user_input_folder)
                 steps.append(f'Создана папка пользователя: {user_input_folder}')
-            else:
-                steps.append(f'Папка пользователя найдена: {user_input_folder}')
 
             # Подбераем список нужных файлов 
             required_files = list(prime_df['Source'].unique())
@@ -59,16 +57,12 @@ class TestPipelineRunner:
             
             if missing_files:
                 raise FileNotFoundError(f"В архиве zakroma_folder отсутствуют файлы: {', '.join(missing_files)}")
-            
-            steps.append(f"Скопированны файлы: {', '.join(copied_files) if copied_files else 'Все были на месте'}")
 
             # Проверка файлов у пользователя
             user_files = os.listdir(user_input_folder)
             not_copied = [f for f in required_files if f not in user_files]
             if not_copied:
                 raise Exception(f"После копирования у пользователя не хватает файлов: {', '.join(not_copied)}")
-            
-            steps.append(f'Все необходимые файл в папке пользователя {user_input_folder}')
 
             questions = prime_df['request_text'].tolist()
             sources = prime_df['Source'].tolist()
