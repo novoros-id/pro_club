@@ -264,7 +264,14 @@ def handle_buttons(message):
         else:
             username = message.from_user.username
 
+        try:
+            me_username = me.username
+        except (NameError, AttributeError):
+            me_username = ""
+            
         text = message.text.strip()
+        text = text.replace(me_username, '').strip()
+
         chatID = message.chat.id
         # Получаем ID топика (подгруппы), если оно там
         thread_id = message.message_thread_id
@@ -316,6 +323,7 @@ def handle_buttons(message):
         elif text.count('$') == 1:
             bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...', message_thread_id=thread_id)
             simpleRequest = request.prepare_request(username, text)
+            print(text)
             request_data = {
                 "chat_id": chatID,
                 "query_text": text,
