@@ -6,7 +6,15 @@
     "configurations": [
 
         {
-            "name": "Telegram_bot",
+            "name": "TelegramBotOnly",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {    
+            "name": "FastAPIOnly",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
@@ -19,8 +27,20 @@
             "jinja": true,
             "justMyCode": false,
             "subProcess": true
-   
 
+            // "name": "Telegram_bot",
+            // "type": "debugpy",
+            // "request": "launch",
+            // "module": "uvicorn",
+            // "args": [
+            //     "main:app",
+            //     "--host", "0.0.0.0",
+            //     "--port", "8090",
+            //     "--reload"
+            // ],
+            // "jinja": true,
+            // "justMyCode": false,
+            // "subProcess": true
         },
     ]
 }
