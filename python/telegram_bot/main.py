@@ -31,6 +31,9 @@ user_history = {}
 # Словарь для хранения состояния пайплайна
 pipeline_state = {} 
 
+# Словарь для хранения состояния файлов пайплайна
+pipeline_state_files = {}
+
 # Объект для выполнения фоновых задач
 executor = ThreadPoolExecutor(max_workers=3)
 
@@ -135,7 +138,11 @@ def truncate_text(text, max_length=max_telegram_message_length):
 def process_request(data: SimpleResponse):
     request_id = data.code_uid.request_uid
     entry = request_chat_map.get(request_id)
+    if not entry:
+        print(f"[ERROR] Запрос с ID {request_id} не найден в request_chat_map!")
+        return {"status": "error", "message": f"Запрос с ID {request_id} не найден."}
     is_pipeline = entry.get("is_pipeline", False)
+    is_source_for_pipeline = entry.get("is_source_for_pipeline", False)
 
     if entry and is_pipeline:
         chat_id = entry["chat_id"]
@@ -174,11 +181,11 @@ def process_request(data: SimpleResponse):
                 )
         except Exception as e:
             print(f"[ERROR] При отправке сообщения: {e}")
-        state = pipeline_state.get(chat_id)
-        if state:
+        state_questions = pipeline_state.get(chat_id)
+        if state_questions:
             # Увеличиваем индекс для следующего вопроса
-            idx_question = state['idx'] + 1
-            total = len(state['questions'])
+            idx_question = state_questions['idx'] + 1
+            total = len(state_questions['questions'])
             bot.send_message(chat_id, f"Обработано: {idx_question} из {total} вопросов.")
 
         try:
@@ -196,6 +203,58 @@ def process_request(data: SimpleResponse):
                 )
         except Exception as e:
             print(f"[ERROR] При записи логов после отправке сообщения: {e}")
+
+    elif entry and is_source_for_pipeline:
+        chat_id = entry["chat_id"]
+        answer = data.answer
+        query_text = entry["query_text"]
+        message_id = entry["message_id"]
+        user_name = entry["username"]
+        request_time = entry["timestamp"]
+        trigger_phrase = "успешно загружен(ы)! Начинаю обработку файла"
+
+        # Добавляем в историю пользователя
+        if chat_id not in user_history:
+            user_history[chat_id] = []
+        user_history[chat_id].append({
+            "request_uid": request_id,
+            "query": query_text,
+            "response": answer,
+            "timestamp": time.time(),
+            "sources": getattr(data, "sources", [])
+        })
+        # Формируем текст ответа
+        response_text = truncate_text(answer)
+        sources = getattr(data, "sources", None)
+
+        if sources:
+            response_text += "\n\nИсточники:\n" + "\n".join([f"- {s}" for s in sources])
+
+        try:
+            msg=bot.send_message(
+                chat_id=chat_id,
+                text=response_text,
+                reply_to_message_id=message_id
+                )
+        except Exception as e:
+            print(f"[ERROR] При отправке сообщения: {e}")
+        entry["response"] = answer
+
+        if trigger_phrase in answer:
+            # Если ответ содержит фразу о загрузке файла, то выходим из функции. Ждем когда файл будет обработан
+            return {"status": "waiting"}
+
+        # # Сохраняем ответ и обновляем статус
+
+        entry["status"] = "completed"
+
+        state_files = pipeline_state_files.get(chat_id)
+        if state_files:
+            # Увеличиваем индекс для следующего файла
+            idx_files = state_files['idx'] + 1
+            total = state_files['total_question']
+            bot.send_message(chat_id, f"Обработано: {idx_files} из {total} файлов.")
+        
     elif entry:
         chat_id = entry["chat_id"]
         answer = data.answer
@@ -206,7 +265,6 @@ def process_request(data: SimpleResponse):
 
         # Сохраняем ответ и обновляем статус
         entry["response"] = answer
-        entry["status"] = "completed"
 
         # Добавляем в историю пользователя
         if chat_id not in user_history:
@@ -266,12 +324,16 @@ def process_request(data: SimpleResponse):
     else:
         print(f"Запрос с ID {request_id} не найден!")
 
-    state = pipeline_state.get(chat_id)
-    if state and state['idx'] < len(state['questions']):
+    state_questions = pipeline_state.get(chat_id)
+    state_files = pipeline_state_files.get(chat_id)
+    if state_questions and state_questions['idx'] < len(state_questions['questions']):
         # Увеличиваем индекс для следующего вопроса
-        state['idx'] += 1
+        state_questions['idx'] += 1
         send_next_pipeline_question(chat_id)
-
+    elif (state_files and state_files['idx'] < len(state_files['file_list'])) and entry['status'] == "completed":
+        # Увеличиваем индекс для следующего файла
+        state_files['idx'] += 1
+        send_next_pipeline_file_for_upload(chat_id)
     return {"status": "ok"}
 
 logs_folder_path = settings.LOG_FOLDER
@@ -300,7 +362,6 @@ def send_welcome(message):
 Если хочешь пообщаться не по текстам, то отправь мне сообщение которое начинается с [$]
 Если у тебя будут предложения обращайся в Клуб Разработчиков 1С ПРО Консалтинг""",
                      reply_markup=keyboard)
-
 
 @bot.message_handler(commands=['help'])
 def help_bot(message):
@@ -382,7 +443,8 @@ def handle_buttons(message):
                 "files": [],
                 "message_id": message.message_id,
                 "username": username,
-                "is_pipeline": False
+                "is_pipeline": False,
+                "is_source_for_pipeline": False
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/files/list')
@@ -408,7 +470,8 @@ def handle_buttons(message):
                     "files": [],
                     "message_id": message.message_id,
                     "username": username,
-                    "is_pipeline": False
+                    "is_pipeline": False,
+                    "is_source_for_pipeline": False
                 }
                 request_chat_map[simpleRequest.code_uid.request_uid] = request_data
                 executor.submit(request.send_request, simpleRequest, '/api/v1/files/delete')
@@ -428,7 +491,9 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username
+                "username": username,
+                "is_pipeline": False,
+                "is_source_for_pipeline": False
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/free_answer')
@@ -446,7 +511,8 @@ def handle_buttons(message):
                 "files": [],
                 "message_id": message.message_id,
                 "username": username,
-                "is_pipeline": False
+                "is_pipeline": False,
+                "is_source_for_pipeline": False
             }
             request_chat_map[simpleRequest.code_uid.request_uid] = request_data
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/answer')
@@ -471,19 +537,19 @@ def handle_document(message):
         else:
             username = message.from_user.username
 
-        chatID = message.chat.id
+        chat_id = message.chat.id
         file_info = bot.get_file(message.document.file_id)
         file_name = message.document.file_name
 
         if file_name == "prime.xlsx":
             try:
                 print ("Загрузка файла prime.xlsx")
-                # Загружаем файл
+                # Загружаем prime файл
                 file_id = message.document.file_id
                 file_info = bot.get_file(file_id)
                 downloaded_file = bot.download_file(file_info.file_path)
 
-                # Сохраняем временный файл
+                # Сохраняем временный prime файл
                 temp_file_path = os.path.join(settings.TEMP_TASK_FOLDER, file_name)
                 with open(temp_file_path, 'wb') as new_file:
                     new_file.write(downloaded_file)
@@ -492,65 +558,70 @@ def handle_document(message):
                     task_folder=settings.TASK_FOLDER,
                     zakroma_folder=settings.ZAKROMA_FOLDER
                 )
-                bot.send_message(chatID, msg)
+                bot.send_message(chat_id, msg)
 
                 prime_path = os.path.join(settings.TASK_FOLDER, 'prime.xlsx')
                 df = pandas.read_excel(prime_path)
-                required_files = list(df["Source"].unique())
-                test_username = "test_user_pipeline"
-                for src_file in required_files:
-                    zakroma_path = os.path.join(settings.ZAKROMA_FOLDER, src_file)
-                    if not os.path.exists(zakroma_path):
-                        bot.send_message(chatID, f"Файл {src_file} отсутствует в zakroma_folder!")
-                        continue
-                    with open(zakroma_path, "rb") as f:
-                        file_bytes = f.read()
-                    upload_document(chatID, src_file, file_bytes, test_username, bot, request, request_chat_map)
+                file_list = list(df["Source"].unique())
+                username = "test_user_pipeline"
+                pipeline_state_files[chat_id] = {
+                    "file_list": file_list,
+                    "total_question": len(file_list),
+                    "idx": 0,
+                    "username": username
+                }
+                # Вызываем функцию для последовательной обработки файлов-источников
+                send_next_pipeline_file_for_upload(chat_id)
+
             except Exception as e:
-                bot.send_message(chatID, e)
+                bot.send_message(chat_id, f"Ошибка при загрузке файла prime.xlsx: {truncate_text(str(e), 1000)}")
             return
         
         elif settings.TELEGRAM_JUST_QUESTIONS:
-            bot.send_message(chatID, "Извините, включен ограниченный режим, нельзя добавлять файлы!")
+            bot.send_message(chat_id, "Извините, включен ограниченный режим, нельзя добавлять файлы!")
 
         else:
             file_id = message.document.file_id
             file_info = bot.get_file(file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            upload_document(chatID, file_name, downloaded_file, username, bot, request, request_chat_map)
+            upload_document(chat_id, file_name, downloaded_file, username, bot, request, request_chat_map, is_source_for_pipeline=False)
     except Exception as e:
         print(f"[ERROR] handle_document: {e}")
 
-def upload_document(chatID, file_name, downloaded_file, username, bot, request, request_chat_map, message_id=None):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
-        file_path = temp_file.name
-        temp_file.write(downloaded_file)
-        mime_type, _ = mimetypes.guess_type(file_path)
-        if mime_type is None:
-            mime_type = 'application/octet-stream'
+def upload_document(chat_id, file_name, downloaded_file, username, bot, request, request_chat_map, message_id=None, is_source_for_pipeline=False):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+            file_path = temp_file.name
+            temp_file.write(downloaded_file)
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
 
-        with open(file_path, 'rb') as file:
-            files = [('files', (file_name, file.read(), mime_type))]
+            with open(file_path, 'rb') as file:
+                files = [('files', (file_name, file.read(), mime_type))]
 
-        request_form = request.prepare_request(username, "")
-        request_data = {
-            "chat_id": chatID,
-            "query_text": "",
-            "request_uid": request_form.code_uid.request_uid,
-            "status": "processing",
-            "timestamp": datetime.datetime.now(),
-            "response": None,
-            "files": [file_name],
-            "message_id": message_id,
-            "username": username,
-            "is_pipeline": False
-        }
-        request_chat_map[request_form.code_uid.request_uid] = request_data
-        response = request.send_file_request(files, request_form, '/api/v1/files/upload')
-        if response.status_code != 200:
-            bot.send_message(chatID, f"Ошибка при загрузке файла '{file_name}': {response.text}")
+            request_form = request.prepare_request(username, "")
+            request_data = {
+                "chat_id": chat_id,
+                "query_text": "",
+                "request_uid": request_form.code_uid.request_uid,
+                "status": "processing",
+                "timestamp": datetime.datetime.now(),
+                "response": None,
+                "files": [file_name],
+                "message_id": message_id,
+                "username": username,
+                "is_pipeline": False,
+                "is_source_for_pipeline": is_source_for_pipeline
+            }
+            request_chat_map[request_form.code_uid.request_uid] = request_data
+            response = request.send_file_request(files, request_form, '/api/v1/files/upload')
+            if response.status_code != 200:
+                bot.send_message(chat_id, f"Ошибка при загрузке файла '{file_name}': {truncate_text(response.text, 1000)}")
 
-        os.remove(file_path)
+            os.remove(file_path)
+    except Exception as e:
+        bot.send_message(chat_id, f"Ошибка при загрузке файла '{file_name}': {truncate_text(str(e), 1000)}")
 
 # === Обработка оценки ответов ===
 @bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))
@@ -578,8 +649,8 @@ def is_user_in_chat(user_id):
     except Exception as e:
         print(f"Ошибка при проверке участника: {e}")
         return False
-
- # Функция для отправки следующего вопроса в пайплайне
+ 
+# Функция для отправки следующего вопроса в пайплайне
 def send_next_pipeline_question(chat_id):
     state = pipeline_state.get(chat_id)
     if not state:
@@ -631,7 +702,8 @@ def send_next_pipeline_question(chat_id):
         "files": [source],
         "message_id": None,
         "username": username,
-        "is_pipeline": True
+        "is_pipeline": True,
+        "is_source_for_pipeline": False
     }
     request_chat_map[simpleRequest.code_uid.request_uid] = request_data
 
@@ -646,6 +718,46 @@ def metrick_start (logs_folder_path, logs_path_file_name, prime_path_file_name):
         file_metrick = prime_path_file_name
         print(f'Возникла ошибка при обработке метрик, проверьте пожалуйста: {file_metrick}')
     return file_metrick
+
+#  Функция для отправки следующего файла-источника по данным prime.xlsx
+def send_next_pipeline_file_for_upload(chat_id):
+    state = pipeline_state_files.get(chat_id)
+    if not state:
+        return
+    
+    idx = state['idx']
+    file_list = state['file_list']
+    username = state['username']
+
+    # Проверяем, есть ли еще файлы для загрузки
+    if idx >= len(file_list):
+        bot.send_message(chat_id, "Все файлы из prime.xlsx успешно загружены и обработаны. Можно запускать конвейер.")
+        del pipeline_state_files[chat_id]  # Удаляем состояние загрузки файлов
+        return
+    
+    # Получаем следующий файл для загрузки
+    src_file = file_list[idx]
+    zakroma_path = os.path.join(settings.ZAKROMA_FOLDER, src_file)
+    if not os.path.exists(zakroma_path):
+        bot.send_message(chat_id, f"Файл {src_file} отсутствует в zakroma_folder!")
+        # Переходим к следующему файлу (без обновлений структуры!)
+        send_next_pipeline_file_for_upload(chat_id)
+        return
+
+    with open(zakroma_path, 'rb') as file:
+        downloaded_file = file.read()
+
+    return upload_document(
+        chat_id=chat_id,
+        file_name=src_file,
+        downloaded_file=downloaded_file,
+        username=username,
+        bot=bot,
+        request=request,
+        request_chat_map=request_chat_map,
+        message_id=None,
+        is_source_for_pipeline=True
+        )
 
 # === Запуск бота с перезапуском ===
 def start_bot():
