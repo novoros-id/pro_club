@@ -244,7 +244,7 @@ def handle_buttons(message):
         print("Chat ID:", message.chat.id)
 
         telegram_user_id = message.from_user.id
-        telegram_username = message.from_user.username
+        telegram_username = message.from_user.username or f"user_{message.from_user.id}"
 
         if message.chat.type != 'private':
             me = bot.get_me()
@@ -262,7 +262,7 @@ def handle_buttons(message):
                     return
             username = settings.TELEGRAM_USER
         else:
-            username = message.from_user.username
+            username = message.from_user.username or f"user_{message.from_user.id}"
 
         try:
             me_username = me.username
@@ -373,7 +373,7 @@ def handle_document(message):
         elif settings.TELEGRAM_JUST_QUESTIONS:
             username = settings.TELEGRAM_USER
         else:
-            username = message.from_user.username
+            username = message.from_user.username or f"user_{message.from_user.id}"
 
         chatID = message.chat.id
         file_info = bot.get_file(message.document.file_id)
