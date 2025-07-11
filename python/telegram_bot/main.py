@@ -412,9 +412,9 @@ def handle_buttons(message):
     try:
 
         print("Chat ID:", message.chat.id)
-        if is_user_in_chat(message.from_user.id) == False:
-             bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
-             return
+
+        telegram_user_id = message.from_user.id
+        telegram_username = message.from_user.username or f"user_{message.from_user.id}"
 
         if message.chat.type != 'private':
             me = bot.get_me()
@@ -422,14 +422,29 @@ def handle_buttons(message):
             if not message_to_the_bot(username, message.text):
                 return
             else:
+                if is_user_in_chat(telegram_user_id) == False:
+                    bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
+                    return
                 username = settings.TELEGRAM_USER    
         elif settings.TELEGRAM_JUST_QUESTIONS:
+            if is_user_in_chat(telegram_user_id) == False:
+                    bot.send_message(message.chat.id, 'Извините, это закрытый канал !')
+                    return
             username = settings.TELEGRAM_USER
         else:
-            username = message.from_user.username
+            username = message.from_user.username or f"user_{message.from_user.id}"
 
+        try:
+            me_username = me.username
+        except (NameError, AttributeError):
+            me_username = ""
+            
         text = message.text.strip()
+        text = text.replace(me_username, '').strip()
+
         chatID = message.chat.id
+        # Получаем ID топика (подгруппы), если оно там
+        thread_id = message.message_thread_id
 
         if text == FILES_LIST_BUTTON:
             simpleRequest = request.prepare_request(username, text)
@@ -442,7 +457,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username,
+                "username": telegram_username,
                 "is_pipeline": False,
                 "is_source_for_pipeline": False
             }
@@ -469,7 +484,7 @@ def handle_buttons(message):
                     "response": None,
                     "files": [],
                     "message_id": message.message_id,
-                    "username": username,
+                    "username": telegram_username,
                     "is_pipeline": False,
                     "is_source_for_pipeline": False
                 }
@@ -480,8 +495,9 @@ def handle_buttons(message):
             bot.send_message(chatID, 'Извините, необходимо указать запрос!')
 
         elif text.count('$') == 1:
-            bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...')
+            bot.send_message(chatID, 'Запрос не по текстам. Секунду, думаю...', message_thread_id=thread_id)
             simpleRequest = request.prepare_request(username, text)
+            print(text)
             request_data = {
                 "chat_id": chatID,
                 "query_text": text,
@@ -491,7 +507,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username,
+                "username": telegram_username,
                 "is_pipeline": False,
                 "is_source_for_pipeline": False
             }
@@ -499,7 +515,7 @@ def handle_buttons(message):
             executor.submit(request.send_request, simpleRequest, '/api/v1/llm/free_answer')
 
         else:
-            bot.send_message(chatID, 'Секунду, думаю...')
+            bot.send_message(chatID, 'Секунду, думаю...', message_thread_id=thread_id)
             simpleRequest = request.prepare_request(username, text)
             request_data = {
                 "chat_id": chatID,
@@ -510,7 +526,7 @@ def handle_buttons(message):
                 "response": None,
                 "files": [],
                 "message_id": message.message_id,
-                "username": username,
+                "username": telegram_username,
                 "is_pipeline": False,
                 "is_source_for_pipeline": False
             }
@@ -535,7 +551,7 @@ def handle_document(message):
         elif settings.TELEGRAM_JUST_QUESTIONS:
             username = settings.TELEGRAM_USER
         else:
-            username = message.from_user.username
+            username = message.from_user.username or f"user_{message.from_user.id}"
 
         chat_id = message.chat.id
         file_info = bot.get_file(message.document.file_id)
