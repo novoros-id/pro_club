@@ -571,11 +571,12 @@ class sfPDFLoader(sfBaseDocumentLoader):
 class sfPPTXLoader(sfBaseDocumentLoader):
     def __init__(self, file_path: str):
         self.file_path = file_path
+
     def load_documents(self):
         from langchain_community.document_loaders import UnstructuredPowerPointLoader
-        docs = []
-        docs = UnstructuredPowerPointLoader(self.file_path)
-        return docs
+        loader = UnstructuredPowerPointLoader(self.file_path)
+        documents = loader.load()  # <-- ВАЖНО: вызываем .load()
+        return documents
 
 class get_keywords:
     import base64
