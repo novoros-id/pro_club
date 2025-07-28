@@ -649,6 +649,16 @@ def handle_rating(call):
     logs_manager.log_rating(chat_id, message_id, rating)
     bot.answer_callback_query(call.id, "Спасибо за вашу оценку!")
 
+# === Обработка оценки ответов ===
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate_'))
+def handle_rating(call):
+    parts = call.data.split('_')
+    chat_id = int(parts[1])
+    message_id = int(parts[2])
+    rating = 'up' if parts[3] == 'up' else 'down'
+    logs_manager.log_rating(chat_id, message_id, rating)
+    bot.answer_callback_query(call.id, "Спасибо за вашу оценку!")
+
 # === Вспомогательные функции ===
 def message_to_the_bot(bot_username, text):
     text = text.strip().lower()
