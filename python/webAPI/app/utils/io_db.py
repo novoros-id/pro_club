@@ -14,11 +14,14 @@ import app.utils.llm_implementation.io_search_from_db as io_search_from_db
 import app.utils.llm_implementation.io_promt as io_promt
 import app.utils.io_file_operation as io_file_operation
 
+from collections import defaultdict
 from app.config import settings_llm, settings
 
 from langchain_ollama import OllamaLLM
 from langchain.schema import HumanMessage
 from langchain_gigachat import GigaChat
+
+MAX_TEXT_LENGTH = 5000  # Максимальная длина текста для резюме
 
 class LLM_Models(Enum):
     Olama3 = settings_llm.MODEL
@@ -227,6 +230,173 @@ class DbHelper:
             text = text.content
 
         return text
+    
+    def get_search_answer(self, prompt, llm_model: LLM_Models = None):
+
+        print("get_search_answer")
+
+        vectordb = self.get_vectror_db()
+
+        llm = self.get_llm(llm_model)
+
+        print("get_search_answer + llm")
+
+        class_name_search = settings_llm.CLASS_NAME_SEARCH_SEARCH
+        search_class = getattr(io_search_from_db, class_name_search)
+        search_object = search_class(prompt, self.user_name, vectordb)
+        data =  search_object.seach_from_db()
+
+        # ✅ Правильная проверка: если data — пустой список или None
+        if not data or isinstance(data, dict):
+            # Если data — словарь или пустой/ошибочный результат
+            return "По вашему запросу не найдено ни одного релевантного документа."
+
+        # Группируем
+        grouped = self.group_chunks_by_document(data, "source")
+
+        print("get_search_answer + io_search_from_db")
+
+        class_name_promt = settings_llm.CLASS_NAME_PROMT
+        promt_class = getattr(io_promt, class_name_promt)
+        promt_object = promt_class(data, prompt)
+        question  =  promt_object.get_promt()
+
+        print("get_search_answer + get_promt")
+
+        #text = llm.invoke(question)
+        #text = f"filtered_docs: {len(grouped)}"
+        text = self.generate_search_response(grouped, llm)
+
+        if LLM_Models.Olama3.value == "gigachat":
+            text = text.content
+
+        return text
+
+    def group_chunks_by_document(self, filtered_docs, metadata_key="source"):
+        """
+        Группирует чанки по имени файла (source) или другому полю в metadata.
+        
+        :param filtered_docs: список словарей вида
+            {
+                "content": "текст чанка",
+                "metadata": {"source": "...", "chunk": 1, "type": "paragraph"},
+                "score": 0.45
+            }
+        :param metadata_key: ключ в metadata, по которому группируем (например, "source")
+        :return: список документов с объединёнными чанками
+        """
+        if not filtered_docs:
+            return []
+
+        groups = defaultdict(list)
+
+        # Группируем чанки по значению metadata[metadata_key]
+        for item in filtered_docs:
+            key = item["metadata"].get(metadata_key)
+            if not key:
+                key = "unknown_source"
+            groups[key].append({
+                "content": item["content"],
+                "score": item["score"],
+                "chunk_metadata": {k: v for k, v in item["metadata"].items() if k != "source"}  # остальные метаданные
+            })
+
+        # Формируем результат
+        result = []
+        for source, chunks in groups.items():
+            # Берём метаданные из первого чанка (source там уже есть)
+            sample_item = filtered_docs[next(i for i, item in enumerate(filtered_docs)
+                                            if item["metadata"].get(metadata_key) == source)]
+
+            result.append({
+                "source": source,  # имя файла
+                "metadata": sample_item["metadata"],  # можно взять целиком
+                "chunks": chunks,  # список всех подходящих чанков
+                "content_snippets": [chunk["content"] for chunk in chunks],
+                "full_text": "\n\n---\n\n".join([chunk["content"] for chunk in chunks]),
+                "chunk_count": len(chunks),
+                "min_score": min(chunk["score"] for chunk in chunks),  # лучшее совпадение
+                "max_score": max(chunk["score"] for chunk in chunks),  # худшее
+            })
+
+        # Сортируем по релевантности: сначала документы с наилучшим (минимальным) score
+        result.sort(key=lambda x: x["min_score"])
+
+        return result
+    
+    def generate_summary_for_document(self, full_text: str, min_score: float, llm) -> str:
+        """
+        Отправляет укороченный текст в LLM и возвращает краткое резюме.
+        Добавляет оценку релевантности (min_score) в промт (опционально).
+        """
+        # Обрезаем текст до MAX_TEXT_LENGTH символов
+        truncated_text = full_text[:MAX_TEXT_LENGTH]
+
+        prompt = f"""
+        Проанализируй следующие фрагменты текста из одного документа и составь краткое резюме (3–5 предложений), о чём идёт речь в этом документе. Укажи основные темы, понятия и контекст. Не включай упоминания о структуре (например, "в параграфе 3 сказано..."), а передай суть содержания.
+
+        Текст:
+        {truncated_text}
+
+        Ответ должен быть на русском языке, кратким и информативным.
+        """
+
+        try:
+            response = llm.invoke(prompt)
+            summary = response.strip()
+        except Exception as e:
+            summary = "Не удалось сгенерировать резюме (ошибка при обращении к LLM)."
+
+        return summary
+
+    def generate_search_response(self, grouped, llm, max_text_length=5000):
+        if not grouped:
+            return "По вашему запросу не найдено ни одного релевантного документа."
+
+        # Устанавливаем лимит длины текста
+        MAX_TEXT_LENGTH = max_text_length
+
+        # Формируем заголовок
+        count = len(grouped)
+        if count == 1:
+            header = f"**Найден 1 документ по вашему запросу.**"
+        elif 2 <= count <= 4:
+            header = f"**Найдено {count} документа по вашему запросу.**"
+        else:
+            header = f"**Найдено {count} документов по вашему запросу.**"
+
+        result_lines = [
+            header,
+            ""  # пустая строка после заголовка
+        ]
+
+        for i, item in enumerate(grouped, 1):
+            source = item["source"]
+            full_text = item["full_text"]
+            min_score = item["min_score"]
+            chunk_count = item["chunk_count"]
+
+            # Оценка релевантности
+            if min_score < 0.3:
+                relevance = "высокая"
+            elif min_score < 0.5:
+                relevance = "средняя"
+            elif min_score < 0.7:
+                relevance = "низкая"
+            else:
+                relevance = "очень низкая"
+
+            # Генерируем краткое резюме
+            summary = self.generate_summary_for_document(full_text, min_score, llm)
+
+            # Добавляем информацию о документе
+            result_lines.append(f"**{i}. {source}**")
+            result_lines.append(f"Релевантность: {relevance} (score: {min_score:.2f})")
+            result_lines.append(f"Найдено фрагментов: {chunk_count}")
+            result_lines.append(f"Краткое содержание: {summary}")
+            result_lines.append("")  # разделитель между документами
+
+        return "\n".join(result_lines).strip()
     
     def get_free_answer (self, prompt, llm_model: LLM_Models = None):
         
