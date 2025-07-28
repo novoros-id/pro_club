@@ -26,7 +26,8 @@ class e_multilingual_e5_large:
 
         hf_embeddings_model = HuggingFaceEmbeddings(
             #todo: need parametr for model_kwargs
-            model_name=model_name, model_kwargs={"device": "cpu"})
+            model_name=model_name, 
+            model_kwargs={"device": "cpu"})
 
         print ("finish e_multilingual_e5_large")
         return hf_embeddings_model
