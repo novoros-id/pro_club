@@ -159,7 +159,7 @@ class sf_DataProcessing_keywords_512_chunk_and_Tables:
         # в chunk должна быть итоговый класс, мы просто добавляем в каждый чанк ключевые слова
         enriched_chunks = []
         for i, chunk in enumerate(chunks):
-            print(f"[LOG] Чанк {i}: {chunk.page_content[:1500]}")  # Логируем первые 500 символов чанка
+            #print(f"[LOG] Чанк {i}: {chunk.page_content[:1500]}")  # Логируем первые 500 символов чанка
             enriched_chunk = doc_c.enrich_chunk_with_additional_info(chunk, keywords)
             enriched_chunks.append(enriched_chunk)
         # ...existing code...

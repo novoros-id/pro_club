@@ -41,6 +41,7 @@ class LLM_Settings(BaseSettings):
     CLASS_NAME_PUT_VECTOR_IN_DB: str
     CLASS_NAME_GET_VECTOR_DB: str
     CLASS_NAME_SEARCH: str
+    CLASS_NAME_SEARCH_SEARCH: str
     CLASS_NAME_PROMT: str
     MODEL: str
     URL_LLM: str
