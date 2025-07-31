@@ -516,6 +516,7 @@ def handle_buttons(message):
 
         else:
             bot.send_message(chatID, 'Секунду, думаю...', message_thread_id=thread_id)
+            print(username)
             simpleRequest = request.prepare_request(username, text)
             request_data = {
                 "chat_id": chatID,
@@ -556,6 +557,8 @@ def handle_document(message):
         chat_id = message.chat.id
         file_info = bot.get_file(message.document.file_id)
         file_name = message.document.file_name
+
+        print(username)
 
         if file_name == "prime.xlsx":
             try:
