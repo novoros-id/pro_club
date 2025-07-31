@@ -27,6 +27,9 @@ async def upload_files(
     request = SimpleRequest(**request_data)
     
     user = get_user(request, db_provider)
+
+    print("user upload_files")
+    print (user)
         
     # Сохраняет файлы в папку Input и запускает их на обработку
     await file_service.save_files_and_process(user, files, request, db_provider, background_tasks)
