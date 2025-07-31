@@ -134,6 +134,12 @@ class sf_DataProcessing_keywords_512_chunk_and_Tables:
         # )
         loader = sfDocumentLoaderFactory.create_loader(self.file_path) 
         documents = loader.load_documents() 
+        print("Данные documents")
+        print(len(documents))
+        if len(documents) == 0:
+            documents =  [LangDocument(
+                    page_content="ERROR: файл содержит только изображения или не содержит текста",
+                    metadata={"source": self.file_path, "type": "error", "error": "no_text_or_tables"})]
         # # Объявляем класс
         doc_c = get_keywords(documents)
         # # находим слова
@@ -426,7 +432,9 @@ class sfDOCXLoader(sfBaseDocumentLoader):
 
         except Exception as e:
             print(f"Ошибка при загрузке документа: {e}")
-            return []
+            return [LangDocument(
+                page_content="ERROR: файл содержит только изображения или не содержит текста",
+                metadata={"source": self.file_path, "type": "error", "error": "no_text_or_tables"})]
 
         return docs
 
